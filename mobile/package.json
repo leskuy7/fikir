@@ -9,8 +9,9 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "doctor": "npx expo-doctor",
-    "build:android:apk": "npx eas build --platform android --profile preview-apk",
-    "build:android:aab": "npx eas build --platform android --profile production"
+    "build:android:apk": "eas build --platform android --profile preview-apk",
+    "build:android:aab": "eas build --platform android --profile production",
+    "submit:android": "eas submit --platform android --profile production"
   },
   "dependencies": {
     "@react-navigation/native": "^7.1.33",

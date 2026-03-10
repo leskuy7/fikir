@@ -12,6 +12,7 @@ module.exports = {
     orientation: 'portrait',
     icon: './assets/icon.png',
     userInterfaceStyle: 'dark',
+    newArchEnabled: true,
     splash: {
       image: './assets/splash-icon.png',
       resizeMode: 'contain',
@@ -31,12 +32,21 @@ module.exports = {
     android: {
       package: androidPackage,
       versionCode: 1,
+      permissions: ['INTERNET'],
       adaptiveIcon: {
         backgroundColor: '#060a12',
         foregroundImage: './assets/android-icon-foreground.png',
         backgroundImage: './assets/android-icon-background.png',
         monochromeImage: './assets/android-icon-monochrome.png',
       },
+      intentFilters: [
+        {
+          action: 'VIEW',
+          autoVerify: true,
+          data: [{ scheme: 'fikirkutusu' }],
+          category: ['DEFAULT', 'BROWSABLE'],
+        },
+      ],
     },
     web: {
       favicon: './assets/favicon.png',
