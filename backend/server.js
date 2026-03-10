@@ -32,7 +32,7 @@ const PORT = process.env.PORT || 3001;
 
 const GECERLI_MODLAR = ['bilgi', 'fikir', 'detay', 'ilgili', 'konu_kilidi'];
 const IZNLI_ORIGINLER = new Set([
-  'https://fikir-kutusu.vercel.app',
+  'https://fikir-nine.vercel.app',
   'http://localhost:5173',
 ]);
 
