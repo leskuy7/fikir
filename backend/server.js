@@ -4,7 +4,6 @@ import 'dotenv/config';
 import admin from 'firebase-admin';
 import { getSystemPrompt } from './prompts/sistem.js';
 import { limitKontrol, limitArtir } from './middleware/rateLimiter.js';
-import { mockYanit } from './mockYanitlar.js';
 
 if (process.env.FIREBASE_SERVICE_ACCOUNT) {
   try {
@@ -30,7 +29,6 @@ async function tokenDogrula(idToken) {
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const MOCK_MODE = process.env.MOCK_MODE === 'true' || !process.env.ANTHROPIC_API_KEY;
 
 const GECERLI_MODLAR = ['bilgi', 'fikir', 'detay', 'ilgili', 'konu_kilidi'];
 const IZNLI_ORIGINLER = new Set([
@@ -101,12 +99,6 @@ app.post('/api/mesaj', async (req, res) => {
     });
   }
 
-  if (MOCK_MODE) {
-    await limitArtir(limitAnahtari);
-    const yanit = mockYanit(mod);
-    return res.json({ yanit });
-  }
-
   let systemPrompt = getSystemPrompt(mod);
   let messages = mesajlar.slice(-10);
 
@@ -163,11 +155,10 @@ app.post('/api/mesaj', async (req, res) => {
 app.get('/health', (req, res) => {
   res.json({
     durum: 'calisiyor',
-    mock: MOCK_MODE,
     redis: !!process.env.REDIS_URL,
   });
 });
 
 app.listen(PORT, () => {
-  console.log(`Sunucu ${PORT} portunda calisiyor${MOCK_MODE ? ' (MOCK modu)' : ''}`);
+  console.log(`Sunucu ${PORT} portunda calisiyor`);
 });
