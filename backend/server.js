@@ -30,6 +30,14 @@ async function tokenDogrula(idToken) {
 const app = express();
 const PORT = process.env.PORT || 3001;
 const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'claude-3-haiku-20240307';
+const MAX_GECMIS_MESAJ = 6;
+const MAX_TOKENS_BY_MOD = {
+  bilgi: 420,
+  fikir: 420,
+  detay: 650,
+  ilgili: 260,
+  konu_kilidi: 380,
+};
 
 const GECERLI_MODLAR = ['bilgi', 'fikir', 'detay', 'ilgili', 'konu_kilidi'];
 const IZNLI_ORIGINLER = new Set([
@@ -101,7 +109,8 @@ app.post('/api/mesaj', async (req, res) => {
   }
 
   let systemPrompt = getSystemPrompt(mod);
-  let messages = mesajlar.slice(-10);
+  let messages = mesajlar.slice(-MAX_GECMIS_MESAJ);
+  const maxTokens = MAX_TOKENS_BY_MOD[mod] || 420;
 
   if (mod === 'konu_kilidi') {
     const firstContent = mesajlar.find((m) => m.role === 'user')?.content || '';
@@ -130,7 +139,7 @@ app.post('/api/mesaj', async (req, res) => {
       },
       body: JSON.stringify({
         model: ANTHROPIC_MODEL,
-        max_tokens: 1024,
+        max_tokens: maxTokens,
         system: systemPrompt,
         messages,
       }),
@@ -157,6 +166,7 @@ app.get('/health', (req, res) => {
   res.json({
     durum: 'calisiyor',
     model: ANTHROPIC_MODEL,
+    maxGecmisMesaj: MAX_GECMIS_MESAJ,
     redis: !!process.env.REDIS_URL,
   });
 });
