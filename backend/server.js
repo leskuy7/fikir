@@ -93,9 +93,7 @@ app.post('/api/mesaj', async (req, res) => {
 
   const limitAnahtari = dogrulanmisUid
     ? `uid:${dogrulanmisUid}`
-    : kullaniciId
-      ? `uid:${kullaniciId}`
-      : req.ip || 'anon';
+    : req.ip || 'anon';
   if (await limitKontrol(limitAnahtari)) {
     return res.status(429).json({
       hata: 'Günlük limit doldu',

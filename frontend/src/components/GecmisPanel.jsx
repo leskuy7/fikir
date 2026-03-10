@@ -14,6 +14,12 @@ export default function GecmisPanel({ kullaniciId, onKapat, onKonuSec }) {
   const [yukleniyor, setYukleniyor] = useState(true);
 
   useEffect(() => {
+    const handleEsc = (e) => { if (e.key === 'Escape') onKapat(); };
+    document.addEventListener('keydown', handleEsc);
+    return () => document.removeEventListener('keydown', handleEsc);
+  }, [onKapat]);
+
+  useEffect(() => {
     let iptal = false;
     setYukleniyor(true);
     konusmalariGetir(kullaniciId)

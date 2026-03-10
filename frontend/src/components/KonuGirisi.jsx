@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import DOMPurify from 'dompurify';
 import YukleniyorSpinner from './YukleniyorSpinner.jsx';
 
 export default function KonuGirisi({
@@ -41,10 +42,12 @@ export default function KonuGirisi({
         <div
           className="konu-girisi__cevap"
           dangerouslySetInnerHTML={{
-            __html: cevap
-              .split('\n\n')
-              .map((p) => `<p>${p.replace(/\n/g, '<br />')}</p>`)
-              .join(''),
+            __html: DOMPurify.sanitize(
+              cevap
+                .split('\n\n')
+                .map((p) => `<p>${p.replace(/\n/g, '<br />')}</p>`)
+                .join('')
+            ),
           }}
         />
       )}

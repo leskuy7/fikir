@@ -82,7 +82,7 @@ export function useKartlar(mod, kullaniciId = null, { onBasari, onLimitDoldu } =
 
       try {
         const detayMesaj = `${kart.baslik}\n\n${kart.kanca || ''}`;
-        const [detayYanit, ilgiliYanit] = await Promise.all([
+        const sonuclar = await Promise.allSettled([
           mesajGonder({
             mesajlar: [{ role: 'user', content: detayMesaj }],
             mod: 'detay',
@@ -95,19 +95,35 @@ export function useKartlar(mod, kullaniciId = null, { onBasari, onLimitDoldu } =
           }),
         ]);
 
-        setDetayIcerik(detayYanit);
-        const ilgiliParsed = jsonCikar(ilgiliYanit);
-        if (Array.isArray(ilgiliParsed) && ilgiliParsed.length > 0) {
-          setIlgiliKartlar(ilgiliParsed);
+        let basariliSayi = 0;
+        let limitHatasi = false;
+
+        if (sonuclar[0].status === 'fulfilled') {
+          setDetayIcerik(sonuclar[0].value);
+          basariliSayi++;
+        } else if (sonuclar[0].reason?.message === 'LIMIT_DOLDU') {
+          limitHatasi = true;
         }
-        onBasari?.(2);
-      } catch (err) {
-        if (err.message === 'LIMIT_DOLDU') {
+
+        if (sonuclar[1].status === 'fulfilled') {
+          const ilgiliParsed = jsonCikar(sonuclar[1].value);
+          if (Array.isArray(ilgiliParsed) && ilgiliParsed.length > 0) {
+            setIlgiliKartlar(ilgiliParsed);
+          }
+          basariliSayi++;
+        } else if (sonuclar[1].reason?.message === 'LIMIT_DOLDU') {
+          limitHatasi = true;
+        }
+
+        if (basariliSayi > 0) onBasari?.(basariliSayi);
+        if (limitHatasi) {
           onLimitDoldu?.();
-          setHata('Günlük limitin doldu.');
-        } else {
+          if (basariliSayi === 0) setHata('Günlük limitin doldu.');
+        } else if (basariliSayi === 0) {
           setHata('Detay yüklenemedi. Tekrar dene.');
         }
+      } catch (err) {
+        setHata('Detay yüklenemedi. Tekrar dene.');
       } finally {
         setDetayYukleniyor(false);
       }

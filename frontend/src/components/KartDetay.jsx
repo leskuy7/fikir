@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+import DOMPurify from 'dompurify';
 import YukleniyorSpinner from './YukleniyorSpinner.jsx';
 import GeriBildirim from './GeriBildirim.jsx';
 import KartPaylas from './KartPaylas.jsx';
@@ -13,6 +14,13 @@ export default function KartDetay({
   mod,
   children,
 }) {
+  useEffect(() => {
+    if (!acikKart) return;
+    const handleEsc = (e) => { if (e.key === 'Escape') onKapat(); };
+    document.addEventListener('keydown', handleEsc);
+    return () => document.removeEventListener('keydown', handleEsc);
+  }, [acikKart, onKapat]);
+
   if (!acikKart) return null;
 
   return (
@@ -40,10 +48,12 @@ export default function KartDetay({
             <div
               className="kart-detay__icerik"
               dangerouslySetInnerHTML={{
-                __html: detayIcerik
-                  .split('\n\n')
-                  .map((p) => `<p>${p.replace(/\n/g, '<br />')}</p>`)
-                  .join(''),
+                __html: DOMPurify.sanitize(
+                  detayIcerik
+                    .split('\n\n')
+                    .map((p) => `<p>${p.replace(/\n/g, '<br />')}</p>`)
+                    .join('')
+                ),
               }}
             />
           ) : null}
