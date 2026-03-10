@@ -1,0 +1,61 @@
+import React from 'react';
+import YukleniyorSpinner from './YukleniyorSpinner.jsx';
+import GeriBildirim from './GeriBildirim.jsx';
+import KartPaylas from './KartPaylas.jsx';
+
+const DETAY_ID = 'kart-detay-paylasim';
+
+export default function KartDetay({
+  acikKart,
+  detayIcerik,
+  detayYukleniyor,
+  onKapat,
+  mod,
+  children,
+}) {
+  if (!acikKart) return null;
+
+  return (
+    <div className="kart-detay-overlay" role="dialog" aria-modal="true" aria-label="Kart detayı">
+      <div className="kart-detay-overlay__backdrop" onClick={onKapat} aria-hidden="true" />
+      <div className="kart-detay" id={DETAY_ID}>
+        <button
+          type="button"
+          className="kart-detay__kapat"
+          onClick={onKapat}
+          aria-label="Kapat"
+        >
+          ×
+        </button>
+        <header className="kart-detay__baslik-wrap">
+          <h2 className="kart-detay__baslik">{acikKart.baslik}</h2>
+          {acikKart.kanca && (
+            <p className="kart-detay__kanca">{acikKart.kanca}</p>
+          )}
+        </header>
+        <div className="kart-detay__govde">
+          {detayYukleniyor ? (
+            <YukleniyorSpinner metin="Detay yükleniyor..." />
+          ) : detayIcerik ? (
+            <div
+              className="kart-detay__icerik"
+              dangerouslySetInnerHTML={{
+                __html: detayIcerik
+                  .split('\n\n')
+                  .map((p) => `<p>${p.replace(/\n/g, '<br />')}</p>`)
+                  .join(''),
+              }}
+            />
+          ) : null}
+          {detayIcerik && !detayYukleniyor && (
+            <div className="kart-detay__aksiyonlar">
+              <GeriBildirim mod={mod || 'detay'} kartBaslik={acikKart.baslik} />
+              <KartPaylas kartElementId={DETAY_ID} kartBaslik={acikKart.baslik} />
+            </div>
+          )}
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}

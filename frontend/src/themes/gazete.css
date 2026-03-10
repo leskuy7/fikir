@@ -1,0 +1,216 @@
+/* ═══════════════════════════════════════
+   Fikir Kutusu — Gazete (Editorial) Tema
+   Krem, serif basliklar, bordo aksan
+   ═══════════════════════════════════════ */
+
+[data-theme="gazete"] {
+  --bg-primary: #faf8f4;
+  --bg-secondary: #f2ede5;
+  --text-primary: #1c1917;
+  --text-secondary: #57534e;
+  --accent: #8b2332;
+  --accent-hover: #6e1a28;
+  --accent-dim: rgba(139, 35, 50, 0.07);
+  --card-bg: #ffffff;
+  --card-border: #e2ddd4;
+  --card-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  --card-glow: none;
+  --input-bg: #ffffff;
+  --input-border: #d4cfc5;
+  --overlay-bg: rgba(250, 248, 244, 0.92);
+  --font-heading: "Playfair Display", Georgia, "Times New Roman", serif;
+  --font-body: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+  --badge-bg: rgba(139, 35, 50, 0.07);
+  --badge-text: #8b2332;
+}
+
+[data-theme="gazete"] body,
+[data-theme="gazete"] .app {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+[data-theme="gazete"] .app::before,
+[data-theme="gazete"] .app::after {
+  display: none;
+}
+
+/* ── Hero ────────────────────────────── */
+[data-theme="gazete"] .app__baslik {
+  font-family: var(--font-heading);
+  font-size: 2.2rem;
+  letter-spacing: -0.03em;
+}
+
+[data-theme="gazete"] .app__altbaslik {
+  font-style: italic;
+  color: var(--text-secondary);
+}
+
+[data-theme="gazete"] .app__logo-icon {
+  background: var(--accent-dim);
+  border: 1px solid rgba(139,35,50,0.12);
+}
+
+[data-theme="gazete"] .app__ayirac {
+  width: 56px;
+  height: 2px;
+  background: var(--accent);
+  opacity: 0.5;
+}
+
+/* ── Kartlar ─────────────────────────── */
+[data-theme="gazete"] .card {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  box-shadow: var(--card-shadow);
+  transition: all 0.25s ease;
+}
+
+[data-theme="gazete"] .card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.06);
+  border-color: #ccc7bc;
+}
+
+[data-theme="gazete"] .kart-grid__kart-etiket {
+  font-family: var(--font-body);
+  font-variant: small-caps;
+  letter-spacing: 0.08em;
+  font-size: 0.72rem;
+}
+
+[data-theme="gazete"] .kart-grid__kart-baslik {
+  font-family: var(--font-heading);
+  font-size: 0.95rem;
+}
+
+[data-theme="gazete"] .kart-grid__kart-emoji {
+  background: var(--accent-dim);
+  border: 1px solid rgba(139,35,50,0.08);
+}
+
+/* ── Kart grid ust cizgi (gazete hissi) */
+[data-theme="gazete"] .kart-grid {
+  border-top: 2px solid var(--accent);
+  padding-top: 1.25rem;
+}
+
+/* ── Overlay / Detay ─────────────────── */
+[data-theme="gazete"] .kart-detay-overlay__backdrop {
+  background: var(--overlay-bg);
+}
+
+[data-theme="gazete"] .kart-detay {
+  background: #fff;
+  border: 1px solid var(--card-border);
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="gazete"] .kart-detay__baslik {
+  font-family: var(--font-heading);
+  font-size: 1.5rem;
+}
+
+[data-theme="gazete"] .kart-detay__kanca {
+  color: var(--accent);
+  font-style: italic;
+  font-weight: 400;
+}
+
+[data-theme="gazete"] .kart-detay__icerik {
+  line-height: 1.8;
+}
+
+/* ── Input alanlari ──────────────────── */
+[data-theme="gazete"] .konu-formu {
+  border-color: var(--input-border);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+}
+
+[data-theme="gazete"] .konu-formu:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(139, 35, 50, 0.06);
+}
+
+[data-theme="gazete"] .konu-formu__gonder {
+  background: var(--accent);
+}
+
+[data-theme="gazete"] .konu-formu__gonder:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+/* ── Mod secici ──────────────────────── */
+[data-theme="gazete"] .mod-secici {
+  background: #fff;
+  border-color: var(--card-border);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+}
+
+[data-theme="gazete"] .mod-secici button.aktif {
+  background: var(--accent);
+  box-shadow: 0 2px 8px rgba(139,35,50,0.2);
+}
+
+/* ── Ayarlar ─────────────────────────── */
+[data-theme="gazete"] .ayarlar-paneli__toggle {
+  background: #fff;
+  border-color: var(--card-border);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+
+[data-theme="gazete"] .ayarlar-paneli__icerik {
+  background: #fff;
+  border: 1px solid var(--card-border);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+}
+
+/* ── Ilgili kartlar ──────────────────── */
+[data-theme="gazete"] .ilgili-kartlar__kart {
+  background: var(--bg-secondary);
+  border: 1px solid var(--card-border);
+}
+
+[data-theme="gazete"] .ilgili-kartlar__kart:hover {
+  background: #fff;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+}
+
+[data-theme="gazete"] .ilgili-kartlar__kart-baslik {
+  font-family: var(--font-heading);
+}
+
+/* ── Konu girisi cevap ───────────────── */
+[data-theme="gazete"] .konu-girisi__cevap {
+  background: var(--bg-secondary);
+  border-color: var(--card-border);
+}
+
+[data-theme="gazete"] .konu-girisi__gonder {
+  background: var(--accent);
+}
+
+/* ── Cerez bildirimi ─────────────────── */
+[data-theme="gazete"] .cerez-bildirimi {
+  background: rgba(255,255,255,0.96);
+  border-color: var(--card-border);
+}
+
+/* ── Skeleton ────────────────────────── */
+[data-theme="gazete"] .skeleton-kart {
+  background: #fff;
+  border: 1px solid var(--card-border);
+}
+
+/* ── Geri bildirim butonlari ─────────── */
+[data-theme="gazete"] .geri-bildirim__btn:hover,
+[data-theme="gazete"] .geri-bildirim__btn--aktif {
+  background: var(--accent-dim);
+}
+
+/* ── Footer ──────────────────────────── */
+[data-theme="gazete"] .app__footer {
+  border-top-color: var(--accent);
+  border-top-width: 2px;
+}

@@ -1,0 +1,13 @@
+{
+  "name": "Fikir Kutusu",
+  "short_name": "FikirKutusu",
+  "description": "Türkiye'nin AI fikir ortağı — kart bazlı keşif motoru",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#070b14",
+  "theme_color": "#4fd1c5",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/favicon.svg", "sizes": "512x512", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}
