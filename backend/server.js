@@ -29,6 +29,7 @@ async function tokenDogrula(idToken) {
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'claude-3-haiku-20240307';
 
 const GECERLI_MODLAR = ['bilgi', 'fikir', 'detay', 'ilgili', 'konu_kilidi'];
 const IZNLI_ORIGINLER = new Set([
@@ -128,7 +129,7 @@ app.post('/api/mesaj', async (req, res) => {
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-         model: 'claude-sonnet-4-20250514',
+        model: ANTHROPIC_MODEL,
         max_tokens: 1024,
         system: systemPrompt,
         messages,
@@ -155,6 +156,7 @@ app.post('/api/mesaj', async (req, res) => {
 app.get('/health', (req, res) => {
   res.json({
     durum: 'calisiyor',
+    model: ANTHROPIC_MODEL,
     redis: !!process.env.REDIS_URL,
   });
 });
