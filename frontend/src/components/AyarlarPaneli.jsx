@@ -6,6 +6,7 @@ export default function AyarlarPaneli({ tema, onChange }) {
   const temaSec = (yeniTema) => {
     onChange(yeniTema);
     document.body.setAttribute('data-theme', yeniTema);
+    setAcik(false);
   };
 
   return (
