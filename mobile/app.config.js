@@ -12,17 +12,10 @@ module.exports = {
     orientation: 'portrait',
     icon: './assets/icon.png',
     userInterfaceStyle: 'dark',
-    newArchEnabled: true,
     splash: {
       image: './assets/splash-icon.png',
       resizeMode: 'contain',
       backgroundColor: '#060a12',
-    },
-    updates: {
-      fallbackToCacheTimeout: 0,
-    },
-    runtimeVersion: {
-      policy: 'appVersion',
     },
     assetBundlePatterns: ['**/*'],
     ios: {
@@ -31,7 +24,6 @@ module.exports = {
     },
     android: {
       package: androidPackage,
-      versionCode: 1,
       permissions: ['INTERNET'],
       adaptiveIcon: {
         backgroundColor: '#060a12',
@@ -53,7 +45,7 @@ module.exports = {
     },
     extra: {
       eas: {
-        projectId: process.env.EXPO_EAS_PROJECT_ID,
+        projectId: process.env.EXPO_EAS_PROJECT_ID || 'f553e6b3-5e8a-464d-a38c-82fcbe31ff45',
       },
       backendUrl: process.env.EXPO_PUBLIC_BACKEND_URL,
     },
