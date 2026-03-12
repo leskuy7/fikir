@@ -286,8 +286,18 @@ app.use(
 );
 app.use(express.json());
 
+// Tek kart modlarında aynı arama oturumu için limit sadece 1 kez artırılır.
+const sayilanOturumlar = new Map(); // oturumId → true
+setInterval(() => {
+  const sinir = Date.now() - 5 * 60 * 1000;
+  for (const [id, zaman] of sayilanOturumlar) {
+    if (zaman < sinir) sayilanOturumlar.delete(id);
+  }
+}, 60 * 1000);
+
 app.post('/api/mesaj', async (req, res) => {
   const { mesajlar, mod, kullaniciId, idToken } = req.body;
+  const aramOturumId = req.headers['x-arama-oturumu'] || null;
 
   if (!mesajlar || !Array.isArray(mesajlar) || mesajlar.length === 0) {
     return res.status(400).json({ hata: 'Geçersiz istek: mesajlar dizisi gerekli' });
@@ -398,7 +408,12 @@ app.post('/api/mesaj', async (req, res) => {
           });
         }
 
-        await limitArtir(limitAnahtari);
+        const tekMod = mod === 'bilgi_tek' || mod === 'fikir_tek';
+        const zatenSayildi = tekMod && aramOturumId && sayilanOturumlar.has(aramOturumId);
+        if (!zatenSayildi) {
+          await limitArtir(limitAnahtari);
+          if (tekMod && aramOturumId) sayilanOturumlar.set(aramOturumId, Date.now());
+        }
         return res.json({ yanit: JSON.stringify(kartlar) });
       } catch {
         return res.status(502).json({ hata: 'AI çıktısı parse edilemedi' });

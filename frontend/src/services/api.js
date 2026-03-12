@@ -12,15 +12,16 @@ async function getIdToken() {
   }
 }
 
-export async function mesajGonder({ mesajlar, mod, kullaniciId = null }) {
+export async function mesajGonder({ mesajlar, mod, kullaniciId = null, aramOturumId = null }) {
   const url = BACKEND_URL ? `${BACKEND_URL}/api/mesaj` : '/api/mesaj';
   const idToken = await getIdToken();
 
+  const headers = { 'Content-Type': 'application/json' };
+  if (aramOturumId) headers['x-arama-oturumu'] = aramOturumId;
+
   const response = await fetch(url, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers,
     body: JSON.stringify({
       mesajlar,
       mod,

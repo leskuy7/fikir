@@ -111,6 +111,7 @@ async function kartlariAsamaliGetir({ konuMetni, tekilMod, kullaniciId, hedefAde
   let limitDoldu = false;
   const kartGecikmeMs = 170;
   const bekle = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const aramOturumId = crypto.randomUUID();
 
   const dene = async () => {
     if (biriken.length >= hedefAdet) return null;
@@ -119,6 +120,7 @@ async function kartlariAsamaliGetir({ konuMetni, tekilMod, kullaniciId, hedefAde
         mesajlar: [{ role: 'user', content: konuMetni }],
         mod: tekilMod,
         kullaniciId,
+        aramOturumId,
       });
       return ilkKartCikar(yanit);
     } catch (err) {
