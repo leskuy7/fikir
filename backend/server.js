@@ -30,6 +30,12 @@ async function tokenDogrula(idToken) {
 const app = express();
 const PORT = process.env.PORT || 3001;
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite';
+const DEPLOY_MARKER = 'RLY-2026-03-12-01';
+const FEATURE_MARKERS = {
+  singleCardModes: 'M-1101',
+  progressiveCardFlow: 'M-1102',
+  truncateFallbacks: 'M-1103',
+};
 const MAX_GECMIS_MESAJ = 6;
 const MAX_TOKENS_BY_MOD = {
   bilgi: 900,
@@ -418,11 +424,17 @@ app.get('/health', (req, res) => {
     durum: 'calisiyor',
     provider: 'gemini',
     model: GEMINI_MODEL,
+    deployMarker: DEPLOY_MARKER,
+    featureMarkers: FEATURE_MARKERS,
     maxGecmisMesaj: MAX_GECMIS_MESAJ,
     redis: !!process.env.REDIS_URL,
   });
 });
 
 app.listen(PORT, () => {
-  console.log(`Sunucu ${PORT} portunda calisiyor`);
+  console.log(`[DEPLOY ${DEPLOY_MARKER}] Sunucu ${PORT} portunda calisiyor`);
+  console.log(
+    `[MARKERS] singleCardModes=${FEATURE_MARKERS.singleCardModes}, progressiveCardFlow=${FEATURE_MARKERS.progressiveCardFlow}, truncateFallbacks=${FEATURE_MARKERS.truncateFallbacks}`
+  );
+  console.log(`[MODS] ${GECERLI_MODLAR.join(', ')}`);
 });
