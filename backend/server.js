@@ -108,6 +108,69 @@ function fallbackKartPromptu(mod, beklenenAdet) {
   ].join(' ');
 }
 
+function tekKartJsonSchema() {
+  return {
+    type: 'OBJECT',
+    properties: {
+      baslik: { type: 'STRING', maxLength: 70 },
+      kanca: { type: 'STRING', maxLength: 160 },
+    },
+    required: ['baslik', 'kanca'],
+    propertyOrdering: ['baslik', 'kanca'],
+  };
+}
+
+function tekKartPromptu(mod, sira, toplam) {
+  const tur = mod === 'fikir' ? 'fikir' : 'bilgi';
+  return [
+    `Sadece gecerli JSON object dondur. ${sira}/${toplam}. karti uret.`,
+    'Sadece su alanlar olsun: baslik, kanca. Ek alan olmasin.',
+    'Markdown, aciklama veya kod blogu yazma.',
+    `Kisa ve etkili bir ${tur} karti yaz. baslik <= 60, kanca <= 130.`,
+  ].join(' ');
+}
+
+async function kartlariTekTekUret(mod, messages, beklenenAdet) {
+  const kartlar = [];
+
+  for (let i = 0; i < beklenenAdet; i += 1) {
+    const tekKartResponse = await geminiIstekAt({
+      systemPrompt: tekKartPromptu(mod, i + 1, beklenenAdet),
+      messages,
+      maxTokens: 240,
+      responseSchema: tekKartJsonSchema(),
+    });
+
+    if (!tekKartResponse.ok) return null;
+
+    const tekKartVeri = await tekKartResponse.json();
+    const tekKartMetni = geminiYanitMetni(tekKartVeri);
+
+    let tekKart;
+    try {
+      const parsed = kartJsonuNormalizeEt(tekKartMetni);
+      if (Array.isArray(parsed)) {
+        tekKart = parsed[0];
+      } else {
+        const temiz = String(tekKartMetni || '')
+          .replace(/^```json\s*/i, '')
+          .replace(/^```\s*/i, '')
+          .replace(/\s*```\s*$/i, '')
+          .trim();
+        tekKart = JSON.parse(temiz);
+      }
+    } catch {
+      return null;
+    }
+
+    const dogrulanan = kartDizisiniDogrula([tekKart], 1);
+    if (!dogrulanan) return null;
+    kartlar.push(dogrulanan[0]);
+  }
+
+  return kartDizisiniDogrula(kartlar, beklenenAdet);
+}
+
 async function geminiIstekAt({ systemPrompt, messages, maxTokens, responseSchema }) {
   return fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${process.env.GEMINI_API_KEY}`,
@@ -281,6 +344,10 @@ app.post('/api/mesaj', async (req, res) => {
               beklenenAdet
             );
           }
+        }
+
+        if (!kartlar) {
+          kartlar = await kartlariTekTekUret(mod, messages, beklenenAdet);
         }
 
         if (!kartlar) {
