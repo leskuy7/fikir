@@ -109,42 +109,48 @@ async function kartlariAsamaliGetir({ konuMetni, tekilMod, kullaniciId, hedefAde
   const biriken = [];
   const gorulenBasliklar = new Set();
   let limitDoldu = false;
+  const kartGecikmeMs = 170;
+  const bekle = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-  const deneVeEkle = async () => {
-    if (biriken.length >= hedefAdet) return false;
-
+  const dene = async () => {
+    if (biriken.length >= hedefAdet) return null;
     try {
       const yanit = await mesajGonder({
         mesajlar: [{ role: 'user', content: konuMetni }],
         mod: tekilMod,
         kullaniciId,
       });
-
-      const kart = ilkKartCikar(yanit);
-      if (!kart) return false;
-
-      const anahtar = kart.baslik.toLocaleLowerCase('tr-TR');
-      if (gorulenBasliklar.has(anahtar)) return false;
-      if (biriken.length >= hedefAdet) return false;
-
-      gorulenBasliklar.add(anahtar);
-      biriken.push(kart);
-      setKartlar([...biriken]);
-      return true;
+      return ilkKartCikar(yanit);
     } catch (err) {
-      if (err?.message === 'LIMIT_DOLDU') {
-        limitDoldu = true;
-      }
-      return false;
+      if (err?.message === 'LIMIT_DOLDU') limitDoldu = true;
+      return null;
     }
   };
 
-  const ilkDalga = Array.from({ length: hedefAdet }, () => deneVeEkle());
-  await Promise.allSettled(ilkDalga);
+  const kartEkle = async (kart) => {
+    if (!kart || biriken.length >= hedefAdet) return;
+    const anahtar = kart.baslik.toLocaleLowerCase('tr-TR');
+    if (gorulenBasliklar.has(anahtar)) return;
+    gorulenBasliklar.add(anahtar);
+    biriken.push(kart);
+    setKartlar([...biriken]);
+    await bekle(kartGecikmeMs);
+  };
 
+  // Ilk dalga paralel atilir, bitenler UI'a tek tek yansitilir.
+  const bekleyen = Array.from({ length: hedefAdet }, () => dene());
+  while (bekleyen.length > 0 && biriken.length < hedefAdet) {
+    const yarisanlar = bekleyen.map((p, index) => p.then((kart) => ({ index, kart })));
+    const { index, kart } = await Promise.race(yarisanlar);
+    bekleyen.splice(index, 1);
+    await kartEkle(kart);
+  }
+
+  // Eksik kart varsa kisa telafi turu.
   let telafi = 0;
   while (biriken.length < hedefAdet && telafi < 4 && !limitDoldu) {
-    await deneVeEkle();
+    const kart = await dene();
+    await kartEkle(kart);
     telafi += 1;
   }
 
