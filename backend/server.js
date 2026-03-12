@@ -34,16 +34,20 @@ const MAX_GECMIS_MESAJ = 6;
 const MAX_TOKENS_BY_MOD = {
   bilgi: 900,
   fikir: 900,
+  bilgi_tek: 240,
+  fikir_tek: 240,
   detay: 650,
   ilgili: 520,
   konu_kilidi: 380,
 };
 
-const GECERLI_MODLAR = ['bilgi', 'fikir', 'detay', 'ilgili', 'konu_kilidi'];
-const JSON_KART_MODLARI = new Set(['bilgi', 'fikir', 'ilgili']);
+const GECERLI_MODLAR = ['bilgi', 'fikir', 'bilgi_tek', 'fikir_tek', 'detay', 'ilgili', 'konu_kilidi'];
+const JSON_KART_MODLARI = new Set(['bilgi', 'fikir', 'ilgili', 'bilgi_tek', 'fikir_tek']);
 const KART_SAYISI_BY_MOD = {
   bilgi: 6,
   fikir: 6,
+  bilgi_tek: 1,
+  fikir_tek: 1,
   ilgili: 4,
 };
 const IZNLI_ORIGINLER = new Set([
@@ -53,6 +57,19 @@ const IZNLI_ORIGINLER = new Set([
 
 function geminiJsonSchema(mod) {
   if (!JSON_KART_MODLARI.has(mod)) return null;
+
+  if (mod === 'bilgi_tek' || mod === 'fikir_tek') {
+    return {
+      type: 'OBJECT',
+      properties: {
+        baslik: { type: 'STRING', maxLength: 80 },
+        kanca: { type: 'STRING', maxLength: 260 },
+      },
+      required: ['baslik', 'kanca'],
+      propertyOrdering: ['baslik', 'kanca'],
+    };
+  }
+
   return {
     type: 'ARRAY',
     minItems: mod === 'ilgili' ? 4 : 6,
@@ -77,9 +94,29 @@ function kartJsonuNormalizeEt(metin) {
     .trim();
 
   const parsed = JSON.parse(temiz);
+  if (parsed && typeof parsed === 'object' && parsed.baslik && parsed.kanca) {
+    return [parsed];
+  }
   if (Array.isArray(parsed)) return parsed;
   if (Array.isArray(parsed?.kartlar)) return parsed.kartlar;
   return null;
+}
+
+function anaMod(mod) {
+  if (mod === 'bilgi_tek') return 'bilgi';
+  if (mod === 'fikir_tek') return 'fikir';
+  return mod;
+}
+
+function tekKartPromptEki(mod) {
+  if (mod !== 'bilgi_tek' && mod !== 'fikir_tek') return '';
+  return [
+    '',
+    'Ek gorev: Bu istekte sadece 1 kart uret.',
+    'Yanit mutlaka su sekilde tek bir JSON object olsun:',
+    '{ "baslik": "...", "kanca": "..." }',
+    'Asla JSON array dondurme.',
+  ].join('\n');
 }
 
 function kartDizisiniDogrula(kartlar, beklenenAdet) {
@@ -277,9 +314,13 @@ app.post('/api/mesaj', async (req, res) => {
     });
   }
 
-  let systemPrompt = getSystemPrompt(mod);
+  let systemPrompt = getSystemPrompt(anaMod(mod));
   let messages = mesajlar.slice(-MAX_GECMIS_MESAJ);
   const maxTokens = MAX_TOKENS_BY_MOD[mod] || 420;
+
+  if (mod === 'bilgi_tek' || mod === 'fikir_tek') {
+    systemPrompt += tekKartPromptEki(mod);
+  }
 
   if (!process.env.GEMINI_API_KEY) {
     return res.status(500).json({ hata: 'GEMINI_API_KEY tanimli degil' });

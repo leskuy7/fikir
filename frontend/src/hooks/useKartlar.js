@@ -94,6 +94,17 @@ function kesikJsondanKartlariTopla(metin) {
   return kartlar.length > 0 ? kartlar : null;
 }
 
+function ilkKartCikar(metin) {
+  const parsed = jsonCikar(metin);
+  if (!Array.isArray(parsed) || parsed.length === 0) return null;
+  const kart = parsed[0];
+  if (!kart?.baslik || !kart?.kanca) return null;
+  return {
+    baslik: String(kart.baslik).trim(),
+    kanca: String(kart.kanca).trim(),
+  };
+}
+
 export function useKartlar(mod, kullaniciId = null, { onBasari, onLimitDoldu } = {}) {
   const [konu, setKonu] = useState('');
   const [kartlar, setKartlar] = useState([]);
@@ -121,20 +132,55 @@ export function useKartlar(mod, kullaniciId = null, { onBasari, onLimitDoldu } =
       kartArandiBildir(mod, yeniKonu.trim());
 
       try {
-        const yanit = await mesajGonder({
-          mesajlar: [{ role: 'user', content: yeniKonu.trim() }],
-          mod,
-          kullaniciId,
-        });
-        const parsed = jsonCikar(yanit);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setKartlar(parsed);
-          onBasari?.();
-          if (kullaniciId) {
-            konusmaKaydet(kullaniciId, mod, parsed, yeniKonu.trim()).catch(() => {});
+        const konuMetni = yeniKonu.trim();
+
+        if (mod === 'bilgi' || mod === 'fikir') {
+          const hedefAdet = 6;
+          const tekilMod = `${mod}_tek`;
+          const biriken = [];
+          const gorulenBasliklar = new Set();
+
+          for (let i = 0; i < hedefAdet; i += 1) {
+            const yanit = await mesajGonder({
+              mesajlar: [{ role: 'user', content: konuMetni }],
+              mod: tekilMod,
+              kullaniciId,
+            });
+            const kart = ilkKartCikar(yanit);
+            if (!kart) continue;
+
+            const anahtar = kart.baslik.toLocaleLowerCase('tr-TR');
+            if (gorulenBasliklar.has(anahtar)) continue;
+
+            gorulenBasliklar.add(anahtar);
+            biriken.push(kart);
+            setKartlar([...biriken]);
+          }
+
+          if (biriken.length > 0) {
+            onBasari?.();
+            if (kullaniciId) {
+              konusmaKaydet(kullaniciId, mod, biriken, konuMetni).catch(() => {});
+            }
+          } else {
+            setHata('Kartlar alınamadı. Tekrar dene.');
           }
         } else {
-          setHata('Kartlar alınamadı. Tekrar dene.');
+          const yanit = await mesajGonder({
+            mesajlar: [{ role: 'user', content: konuMetni }],
+            mod,
+            kullaniciId,
+          });
+          const parsed = jsonCikar(yanit);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setKartlar(parsed);
+            onBasari?.();
+            if (kullaniciId) {
+              konusmaKaydet(kullaniciId, mod, parsed, konuMetni).catch(() => {});
+            }
+          } else {
+            setHata('Kartlar alınamadı. Tekrar dene.');
+          }
         }
       } catch (err) {
         if (err.message === 'LIMIT_DOLDU') {
