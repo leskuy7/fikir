@@ -105,59 +105,27 @@ function ilkKartCikar(metin) {
   };
 }
 
-async function kartlariAsamaliGetir({ konuMetni, tekilMod, kullaniciId, hedefAdet, setKartlar }) {
-  const biriken = [];
-  const gorulenBasliklar = new Set();
-  let limitDoldu = false;
-  const kartGecikmeMs = 170;
+// 1 istekle tum kartlari alir, sonra birer birer UI'a ekler (700ms aralikla).
+async function kartlariGetirVeGoster({ konuMetni, mod, kullaniciId, setKartlar }) {
   const bekle = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-  const aramOturumId = crypto.randomUUID();
 
-  const dene = async () => {
-    if (biriken.length >= hedefAdet) return null;
-    try {
-      const yanit = await mesajGonder({
-        mesajlar: [{ role: 'user', content: konuMetni }],
-        mod: tekilMod,
-        kullaniciId,
-        aramOturumId,
-      });
-      return ilkKartCikar(yanit);
-    } catch (err) {
-      if (err?.message === 'LIMIT_DOLDU') limitDoldu = true;
-      return null;
-    }
-  };
+  const yanit = await mesajGonder({
+    mesajlar: [{ role: 'user', content: konuMetni }],
+    mod,
+    kullaniciId,
+  });
 
-  const kartEkle = async (kart) => {
-    if (!kart || biriken.length >= hedefAdet) return;
-    const anahtar = kart.baslik.toLocaleLowerCase('tr-TR');
-    if (gorulenBasliklar.has(anahtar)) return;
-    gorulenBasliklar.add(anahtar);
-    biriken.push(kart);
-    setKartlar([...biriken]);
-    await bekle(kartGecikmeMs);
-  };
+  const kartlar = jsonCikar(yanit);
+  if (!Array.isArray(kartlar) || kartlar.length === 0) return [];
 
-  // Kartlar sirayla istenir: biri bitmeden digeri baslamaz.
-  for (let i = 0; i < hedefAdet && !limitDoldu; i++) {
-    const kart = await dene();
-    await kartEkle(kart);
+  const gosterilen = [];
+  for (const kart of kartlar) {
+    gosterilen.push(kart);
+    setKartlar([...gosterilen]);
+    await bekle(700);
   }
 
-  // Eksik kart varsa kisa telafi turu.
-  let telafi = 0;
-  while (biriken.length < hedefAdet && telafi < 4 && !limitDoldu) {
-    const kart = await dene();
-    await kartEkle(kart);
-    telafi += 1;
-  }
-
-  if (limitDoldu && biriken.length === 0) {
-    throw new Error('LIMIT_DOLDU');
-  }
-
-  return biriken;
+  return gosterilen;
 }
 
 export function useKartlar(mod, kullaniciId = null, { onBasari, onLimitDoldu } = {}) {
@@ -190,13 +158,10 @@ export function useKartlar(mod, kullaniciId = null, { onBasari, onLimitDoldu } =
         const konuMetni = yeniKonu.trim();
 
         if (mod === 'bilgi' || mod === 'fikir') {
-          const hedefAdet = 6;
-          const tekilMod = `${mod}_tek`;
-          const biriken = await kartlariAsamaliGetir({
+          const biriken = await kartlariGetirVeGoster({
             konuMetni,
-            tekilMod,
+            mod,
             kullaniciId,
-            hedefAdet,
             setKartlar,
           });
 
