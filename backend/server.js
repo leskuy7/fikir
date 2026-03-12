@@ -32,10 +32,10 @@ const PORT = process.env.PORT || 3001;
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite';
 const MAX_GECMIS_MESAJ = 6;
 const MAX_TOKENS_BY_MOD = {
-  bilgi: 420,
-  fikir: 420,
+  bilgi: 900,
+  fikir: 900,
   detay: 650,
-  ilgili: 260,
+  ilgili: 520,
   konu_kilidi: 380,
 };
 
@@ -55,8 +55,8 @@ function geminiJsonSchema(mod) {
     items: {
       type: 'OBJECT',
       properties: {
-        baslik: { type: 'STRING' },
-        kanca: { type: 'STRING' },
+        baslik: { type: 'STRING', maxLength: 80 },
+        kanca: { type: 'STRING', maxLength: 260 },
       },
       required: ['baslik', 'kanca'],
       propertyOrdering: ['baslik', 'kanca'],
