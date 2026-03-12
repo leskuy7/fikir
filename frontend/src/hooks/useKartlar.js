@@ -105,10 +105,8 @@ function ilkKartCikar(metin) {
   };
 }
 
-// 1 istekle tum kartlari alir, sonra birer birer UI'a ekler (700ms aralikla).
+// 1 istekle tum kartlari alir ve direkt gosterir.
 async function kartlariGetirVeGoster({ konuMetni, mod, kullaniciId, setKartlar }) {
-  const bekle = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
   const yanit = await mesajGonder({
     mesajlar: [{ role: 'user', content: konuMetni }],
     mod,
@@ -118,14 +116,8 @@ async function kartlariGetirVeGoster({ konuMetni, mod, kullaniciId, setKartlar }
   const kartlar = jsonCikar(yanit);
   if (!Array.isArray(kartlar) || kartlar.length === 0) return [];
 
-  const gosterilen = [];
-  for (const kart of kartlar) {
-    gosterilen.push(kart);
-    setKartlar([...gosterilen]);
-    await bekle(700);
-  }
-
-  return gosterilen;
+  setKartlar(kartlar);
+  return kartlar;
 }
 
 export function useKartlar(mod, kullaniciId = null, { onBasari, onLimitDoldu } = {}) {
