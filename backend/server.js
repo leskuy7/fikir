@@ -41,6 +41,11 @@ const MAX_TOKENS_BY_MOD = {
 
 const GECERLI_MODLAR = ['bilgi', 'fikir', 'detay', 'ilgili', 'konu_kilidi'];
 const JSON_KART_MODLARI = new Set(['bilgi', 'fikir', 'ilgili']);
+const KART_SAYISI_BY_MOD = {
+  bilgi: 6,
+  fikir: 6,
+  ilgili: 4,
+};
 const IZNLI_ORIGINLER = new Set([
   'https://fikir-nine.vercel.app',
   'http://localhost:5173',
@@ -65,10 +70,67 @@ function geminiJsonSchema(mod) {
 }
 
 function kartJsonuNormalizeEt(metin) {
-  const parsed = JSON.parse(metin);
+  const temiz = String(metin || '')
+    .replace(/^```json\s*/i, '')
+    .replace(/^```\s*/i, '')
+    .replace(/\s*```\s*$/i, '')
+    .trim();
+
+  const parsed = JSON.parse(temiz);
   if (Array.isArray(parsed)) return parsed;
   if (Array.isArray(parsed?.kartlar)) return parsed.kartlar;
   return null;
+}
+
+function kartDizisiniDogrula(kartlar, beklenenAdet) {
+  if (!Array.isArray(kartlar)) return null;
+
+  const temizlenmis = kartlar
+    .map((kart) => ({
+      baslik: String(kart?.baslik || '').trim(),
+      kanca: String(kart?.kanca || '').trim(),
+    }))
+    .filter((kart) => kart.baslik && kart.kanca)
+    .slice(0, beklenenAdet);
+
+  if (temizlenmis.length !== beklenenAdet) return null;
+  return temizlenmis;
+}
+
+function fallbackKartPromptu(mod, beklenenAdet) {
+  const tur = mod === 'fikir' ? 'fikir karti' : 'bilgi karti';
+  return [
+    `Sadece gecerli JSON dizi dondur. Tam olarak ${beklenenAdet} kart yaz.`,
+    'Markdown, kod blogu, aciklama veya ek metin yazma.',
+    `Her oge su formatta olsun: {"baslik":"...","kanca":"..."}`,
+    'baslik en fazla 55 karakter, kanca en fazla 140 karakter olsun.',
+    `Kartlar kisa, net ve farkli acilardan ${tur} olsun.`,
+  ].join(' ');
+}
+
+async function geminiIstekAt({ systemPrompt, messages, maxTokens, responseSchema }) {
+  return fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${process.env.GEMINI_API_KEY}`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        systemInstruction: {
+          parts: [{ text: systemPrompt }],
+        },
+        contents: geminiIcerikleriniHazirla(messages),
+        generationConfig: {
+          maxOutputTokens: maxTokens,
+          ...(responseSchema && {
+            responseMimeType: 'application/json',
+            responseSchema,
+          }),
+        },
+      }),
+    }
+  );
 }
 
 function konuKilidiParse(userContent) {
@@ -179,28 +241,12 @@ app.post('/api/mesaj', async (req, res) => {
 
   try {
     const responseSchema = geminiJsonSchema(mod);
-    const geminiResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${process.env.GEMINI_API_KEY}`,
-      {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        systemInstruction: {
-          parts: [{ text: systemPrompt }],
-        },
-        contents: geminiIcerikleriniHazirla(messages),
-        generationConfig: {
-          maxOutputTokens: maxTokens,
-          ...(responseSchema && {
-            responseMimeType: 'application/json',
-            responseSchema,
-          }),
-        },
-      }),
-      }
-    );
+    const geminiResponse = await geminiIstekAt({
+      systemPrompt,
+      messages,
+      maxTokens,
+      responseSchema,
+    });
 
     if (!geminiResponse.ok) {
       const hata = await geminiResponse.json().catch(() => ({}));
@@ -209,14 +255,41 @@ app.post('/api/mesaj', async (req, res) => {
     }
 
     const veri = await geminiResponse.json();
-    const yanitMetni = geminiYanitMetni(veri);
+    let yanitMetni = geminiYanitMetni(veri);
 
     if (JSON_KART_MODLARI.has(mod)) {
+      const beklenenAdet = KART_SAYISI_BY_MOD[mod] || 6;
       try {
-        const kartlar = kartJsonuNormalizeEt(yanitMetni);
-        if (!Array.isArray(kartlar) || kartlar.length === 0) {
-          return res.status(502).json({ hata: 'AI çıktısı geçersiz formatta' });
+        let kartlar = kartDizisiniDogrula(
+          kartJsonuNormalizeEt(yanitMetni),
+          beklenenAdet
+        );
+
+        if (!kartlar) {
+          const fallbackResponse = await geminiIstekAt({
+            systemPrompt: fallbackKartPromptu(mod, beklenenAdet),
+            messages,
+            maxTokens: Math.max(maxTokens + 500, 1400),
+            responseSchema,
+          });
+
+          if (fallbackResponse.ok) {
+            const fallbackVeri = await fallbackResponse.json();
+            yanitMetni = geminiYanitMetni(fallbackVeri);
+            kartlar = kartDizisiniDogrula(
+              kartJsonuNormalizeEt(yanitMetni),
+              beklenenAdet
+            );
+          }
         }
+
+        if (!kartlar) {
+          return res.status(502).json({
+            hata: 'AI çıktısı geçersiz formatta',
+            detay: 'Kart JSON üretimi tamamlanamadi',
+          });
+        }
+
         await limitArtir(limitAnahtari);
         return res.json({ yanit: JSON.stringify(kartlar) });
       } catch {
