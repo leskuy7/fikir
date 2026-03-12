@@ -103,6 +103,56 @@ function ilkKartCikar(metin) {
   };
 }
 
+async function kartlariAsamaliGetir({ konuMetni, tekilMod, kullaniciId, hedefAdet, setKartlar }) {
+  const biriken = [];
+  const gorulenBasliklar = new Set();
+  let limitDoldu = false;
+
+  const deneVeEkle = async () => {
+    if (biriken.length >= hedefAdet) return false;
+
+    try {
+      const yanit = await mesajGonder({
+        mesajlar: [{ role: 'user', content: konuMetni }],
+        mod: tekilMod,
+        kullaniciId,
+      });
+
+      const kart = ilkKartCikar(yanit);
+      if (!kart) return false;
+
+      const anahtar = kart.baslik.toLocaleLowerCase('tr-TR');
+      if (gorulenBasliklar.has(anahtar)) return false;
+      if (biriken.length >= hedefAdet) return false;
+
+      gorulenBasliklar.add(anahtar);
+      biriken.push(kart);
+      setKartlar([...biriken]);
+      return true;
+    } catch (err) {
+      if (err?.message === 'LIMIT_DOLDU') {
+        limitDoldu = true;
+      }
+      return false;
+    }
+  };
+
+  const ilkDalga = Array.from({ length: hedefAdet }, () => deneVeEkle());
+  await Promise.allSettled(ilkDalga);
+
+  let telafi = 0;
+  while (biriken.length < hedefAdet && telafi < 4 && !limitDoldu) {
+    await deneVeEkle();
+    telafi += 1;
+  }
+
+  if (limitDoldu && biriken.length === 0) {
+    throw new Error('LIMIT_DOLDU');
+  }
+
+  return biriken;
+}
+
 export function useKartlar(mod, kullaniciId = null) {
   const [konu, setKonu] = useState('');
   const [kartlar, setKartlar] = useState([]);
@@ -130,25 +180,13 @@ export function useKartlar(mod, kullaniciId = null) {
         if (mod === 'bilgi' || mod === 'fikir') {
           const hedefAdet = 6;
           const tekilMod = `${mod}_tek`;
-          const biriken = [];
-          const gorulenBasliklar = new Set();
-
-          for (let i = 0; i < hedefAdet; i += 1) {
-            const yanit = await mesajGonder({
-              mesajlar: [{ role: 'user', content: konuMetni }],
-              mod: tekilMod,
-              kullaniciId,
-            });
-            const kart = ilkKartCikar(yanit);
-            if (!kart) continue;
-
-            const anahtar = kart.baslik.toLocaleLowerCase('tr-TR');
-            if (gorulenBasliklar.has(anahtar)) continue;
-
-            gorulenBasliklar.add(anahtar);
-            biriken.push(kart);
-            setKartlar([...biriken]);
-          }
+          const biriken = await kartlariAsamaliGetir({
+            konuMetni,
+            tekilMod,
+            kullaniciId,
+            hedefAdet,
+            setKartlar,
+          });
 
           if (biriken.length === 0) {
             setHata('Kartlar alınamadı. Tekrar dene.');
