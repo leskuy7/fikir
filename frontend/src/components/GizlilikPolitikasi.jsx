@@ -37,7 +37,7 @@ export default function GizlilikPolitikasi({ onKapat }) {
           <h3>4. Verilerin Paylaşımı</h3>
           <p>
             Kişisel verileriniz üçüncü taraflarla satılmaz veya paylaşılmaz. Yalnızca
-            hizmet sağlayıcılar (Firebase, Google Analytics, Anthropic API) teknik
+            hizmet sağlayıcılar (Firebase, Google Analytics, Google Gemini API) teknik
             gereksinimler doğrultusunda verilere erişebilir.
           </p>
 
@@ -60,7 +60,7 @@ export default function GizlilikPolitikasi({ onKapat }) {
 
           <h3>7. Yapay Zeka Kullanımı Hakkında</h3>
           <p>
-            Fikir Kutusu, içerik üretmek için yapay zeka (Anthropic Claude) kullanır.
+            Fikir Kutusu, içerik üretmek için yapay zeka (Google Gemini) kullanır.
             Üretilen içerikler bilgilendirme amaçlıdır. Tıbbi, hukuki veya finansal
             tavsiye niteliği taşımaz. Kararlarınızda profesyonel danışmanlık almanız
             önerilir.

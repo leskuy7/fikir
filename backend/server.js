@@ -29,7 +29,7 @@ async function tokenDogrula(idToken) {
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'claude-3-haiku-20240307';
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite';
 const MAX_GECMIS_MESAJ = 6;
 const MAX_TOKENS_BY_MOD = {
   bilgi: 420,
@@ -55,6 +55,24 @@ function konuKilidiParse(userContent) {
   const kartBasligi = nokta > 0 ? kartStr.slice(0, nokta).trim() : kartStr;
   const kartKonusu = nokta > 0 ? kartStr.slice(nokta + 2).trim() : kartStr;
   return { kartBasligi, kartKonusu, soru };
+}
+
+function geminiRole(role) {
+  return role === 'assistant' ? 'model' : 'user';
+}
+
+function geminiIcerikleriniHazirla(messages) {
+  return messages.map((mesaj) => ({
+    role: geminiRole(mesaj.role),
+    parts: [{ text: String(mesaj.content || '') }],
+  }));
+}
+
+function geminiYanitMetni(veri) {
+  return veri.candidates?.[0]?.content?.parts
+    ?.map((part) => part.text || '')
+    .join('')
+    .trim() || '';
 }
 
 app.use(
@@ -112,6 +130,10 @@ app.post('/api/mesaj', async (req, res) => {
   let messages = mesajlar.slice(-MAX_GECMIS_MESAJ);
   const maxTokens = MAX_TOKENS_BY_MOD[mod] || 420;
 
+  if (!process.env.GEMINI_API_KEY) {
+    return res.status(500).json({ hata: 'GEMINI_API_KEY tanimli degil' });
+  }
+
   if (mod === 'konu_kilidi') {
     const firstContent = mesajlar.find((m) => m.role === 'user')?.content || '';
     const parsed = konuKilidiParse(firstContent);
@@ -130,29 +152,33 @@ app.post('/api/mesaj', async (req, res) => {
   }
 
   try {
-    const anthropicResponse = await fetch('https://api.anthropic.com/v1/messages', {
+    const geminiResponse = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: ANTHROPIC_MODEL,
-        max_tokens: maxTokens,
-        system: systemPrompt,
-        messages,
+        systemInstruction: {
+          parts: [{ text: systemPrompt }],
+        },
+        contents: geminiIcerikleriniHazirla(messages),
+        generationConfig: {
+          maxOutputTokens: maxTokens,
+        },
       }),
-    });
+      }
+    );
 
-    if (!anthropicResponse.ok) {
-      const hata = await anthropicResponse.json().catch(() => ({}));
-      console.error('Anthropic hatası:', hata);
+    if (!geminiResponse.ok) {
+      const hata = await geminiResponse.json().catch(() => ({}));
+      console.error('Gemini hatası:', hata);
       return res.status(502).json({ hata: 'AI servisi şu an yanıt vermiyor' });
     }
 
-    const veri = await anthropicResponse.json();
-    const yanitMetni = veri.content?.[0]?.text ?? '';
+    const veri = await geminiResponse.json();
+    const yanitMetni = geminiYanitMetni(veri);
 
     await limitArtir(limitAnahtari);
     res.json({ yanit: yanitMetni });
@@ -165,7 +191,8 @@ app.post('/api/mesaj', async (req, res) => {
 app.get('/health', (req, res) => {
   res.json({
     durum: 'calisiyor',
-    model: ANTHROPIC_MODEL,
+    provider: 'gemini',
+    model: GEMINI_MODEL,
     maxGecmisMesaj: MAX_GECMIS_MESAJ,
     redis: !!process.env.REDIS_URL,
   });
