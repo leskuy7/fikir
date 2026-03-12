@@ -16,11 +16,11 @@ const EMOJILER_FIKIR = ['🚀', '💡', '🎯', '⚡', '🌟', '🔧'];
 
 export default function KartlarScreen({ route, navigation }) {
   const { konu, mod } = route.params;
-  const { kartlar, yukleniyor, hata, kartlariGetir, detayAc } = useKartlar(mod);
+  const { kartlar, yukleniyor, hata, kartlariGetir } = useKartlar(mod);
 
   useEffect(() => {
     kartlariGetir(konu);
-  }, [konu]);
+  }, [konu, kartlariGetir]);
 
   const emojiler = mod === 'bilgi' ? EMOJILER_BILGI : EMOJILER_FIKIR;
 
@@ -47,17 +47,21 @@ export default function KartlarScreen({ route, navigation }) {
 
   return (
     <SafeAreaView style={s.container}>
-      <Text style={s.ustBaslik}>
-        {kartlar.length > 0
-          ? `${kartlar.length} ${mod === 'bilgi' ? 'bilgi' : 'fikir'} — "${konu}"`
-          : `"${konu}" aranıyor...`}
-      </Text>
+      <View style={s.ustKart}>
+        <Text style={s.modRozet}>{mod === 'bilgi' ? 'Bilgi Modu' : 'Fikir Modu'}</Text>
+        <Text style={s.ustBaslik}>
+          {kartlar.length > 0
+            ? `${kartlar.length} ${mod === 'bilgi' ? 'bilgi' : 'fikir'} kartı bulundu`
+            : `"${konu}" aranıyor...`}
+        </Text>
+        <Text style={s.konuMetin}>Konu: {konu}</Text>
+      </View>
 
       {yukleniyor && (
         <ActivityIndicator
           size="large"
           color={tema.accent}
-          style={{ marginTop: 40 }}
+          style={{ marginTop: 22 }}
         />
       )}
 
@@ -66,7 +70,7 @@ export default function KartlarScreen({ route, navigation }) {
       <FlatList
         data={kartlar}
         renderItem={renderKart}
-        keyExtractor={(_, i) => String(i)}
+        keyExtractor={(item, i) => `${item.baslik || 'kart'}-${i}`}
         numColumns={2}
         columnWrapperStyle={s.satir}
         contentContainerStyle={s.liste}
@@ -78,41 +82,73 @@ export default function KartlarScreen({ route, navigation }) {
 
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: tema.bg },
+  ustKart: {
+    marginHorizontal: 12,
+    marginTop: 10,
+    marginBottom: 8,
+    padding: 12,
+    backgroundColor: tema.cardBg,
+    borderWidth: 1,
+    borderColor: tema.cardBorder,
+    borderRadius: tema.radius,
+  },
+  modRozet: {
+    alignSelf: 'flex-start',
+    color: tema.accent,
+    backgroundColor: tema.accentDim,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    fontSize: 11,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
   ustBaslik: {
+    color: tema.text,
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  konuMetin: {
     color: tema.textSecondary,
-    fontSize: 13,
-    textAlign: 'center',
-    paddingVertical: 12,
+    fontSize: 12,
   },
   hata: {
-    color: '#f87171',
+    color: tema.danger,
     textAlign: 'center',
     marginTop: 16,
     fontSize: 14,
   },
-  liste: { paddingHorizontal: 12, paddingBottom: 24 },
+  liste: { paddingHorizontal: 12, paddingBottom: 24, paddingTop: 6 },
   satir: { gap: 10, marginBottom: 10 },
   kart: {
     flex: 1,
     backgroundColor: tema.cardBg,
     borderRadius: tema.radius,
-    padding: 14,
+    padding: 15,
     borderWidth: 1,
     borderColor: tema.cardBorder,
+    minHeight: 156,
+    shadowColor: '#000',
+    shadowOpacity: 0.22,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 3,
   },
   kartUst: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginBottom: 8,
+    marginBottom: 10,
   },
   emoji: { fontSize: 18 },
   etiket: { fontSize: 11, color: tema.accent, fontWeight: '600' },
   baslik: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '700',
     color: tema.text,
-    marginBottom: 4,
+    marginBottom: 6,
+    lineHeight: 21,
   },
-  kanca: { fontSize: 12, color: tema.textSecondary, lineHeight: 17 },
+  kanca: { fontSize: 13, color: tema.textSecondary, lineHeight: 19 },
 });

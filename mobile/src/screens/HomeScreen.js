@@ -27,27 +27,32 @@ export default function HomeScreen({ navigation }) {
 
   return (
     <SafeAreaView style={s.container}>
+      <View style={s.arkaDaire1} />
+      <View style={s.arkaDaire2} />
+
       <View style={s.hero}>
-        <Text style={s.logo}>✨</Text>
+        <View style={s.logoBadge}>
+          <Text style={s.logo}>✨</Text>
+        </View>
         <Text style={s.baslik}>Fikir Kutusu</Text>
         <Text style={s.altbaslik}>Merak et, keşfet, ilham al</Text>
       </View>
 
-      <View style={s.modRow}>
-        {MODLAR.map((m) => (
-          <TouchableOpacity
-            key={m.key}
-            style={[s.modBtn, aktifMod === m.key && s.modBtnAktif]}
-            onPress={() => setAktifMod(m.key)}
-          >
-            <Text style={[s.modTxt, aktifMod === m.key && s.modTxtAktif]}>
-              {m.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+      <View style={s.kontrolKart}>
+        <View style={s.modRow}>
+          {MODLAR.map((m) => (
+            <TouchableOpacity
+              key={m.key}
+              style={[s.modBtn, aktifMod === m.key && s.modBtnAktif]}
+              onPress={() => setAktifMod(m.key)}
+            >
+              <Text style={[s.modTxt, aktifMod === m.key && s.modTxtAktif]}>
+                {m.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
 
-      <View style={s.inputRow}>
         <TextInput
           style={s.input}
           placeholder={
@@ -61,11 +66,14 @@ export default function HomeScreen({ navigation }) {
           onSubmitEditing={ara}
           returnKeyType="search"
         />
+
         <TouchableOpacity style={s.btn} onPress={ara}>
           <Text style={s.btnTxt}>
-            {aktifMod === 'bilgi' ? 'Keşfet' : 'Üret'}
+            {aktifMod === 'bilgi' ? 'Keşfetmeye Başla' : 'Fikir Üret'}
           </Text>
         </TouchableOpacity>
+
+        <Text style={s.ipucu}>Kısa ve net bir konu yazman daha iyi sonuç verir.</Text>
       </View>
     </SafeAreaView>
   );
@@ -77,52 +85,85 @@ const s = StyleSheet.create({
     backgroundColor: tema.bg,
     paddingHorizontal: 20,
     justifyContent: 'center',
+    overflow: 'hidden',
   },
-  hero: { alignItems: 'center', marginBottom: 32 },
-  logo: { fontSize: 44, marginBottom: 8 },
+  arkaDaire1: {
+    position: 'absolute',
+    width: 220,
+    height: 220,
+    borderRadius: 999,
+    backgroundColor: tema.accentSoft,
+    top: -60,
+    right: -70,
+  },
+  arkaDaire2: {
+    position: 'absolute',
+    width: 180,
+    height: 180,
+    borderRadius: 999,
+    backgroundColor: 'rgba(120, 167, 224, 0.16)',
+    bottom: -40,
+    left: -60,
+  },
+  hero: { alignItems: 'center', marginBottom: 22 },
+  logoBadge: {
+    width: 74,
+    height: 74,
+    borderRadius: 999,
+    backgroundColor: tema.cardBg,
+    borderWidth: 1,
+    borderColor: tema.cardBorderStrong,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  logo: { fontSize: 36 },
   baslik: {
-    fontSize: 28,
+    fontSize: 30,
     fontWeight: '700',
     color: tema.text,
-    letterSpacing: -0.5,
+    letterSpacing: -0.7,
   },
   altbaslik: {
     fontSize: 15,
     color: tema.textSecondary,
-    marginTop: 4,
+    marginTop: 6,
+  },
+  kontrolKart: {
+    backgroundColor: tema.cardBg,
+    borderWidth: 1,
+    borderColor: tema.cardBorder,
+    borderRadius: tema.radius + 4,
+    padding: 14,
+    gap: 12,
   },
   modRow: {
     flexDirection: 'row',
-    justifyContent: 'center',
     gap: 8,
-    marginBottom: 24,
-  },
-  modBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: 20,
-    borderRadius: 100,
     backgroundColor: tema.bgSecondary,
+    borderRadius: 999,
     borderWidth: 1,
     borderColor: tema.cardBorder,
+    padding: 4,
+  },
+  modBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 100,
+    alignItems: 'center',
   },
   modBtnAktif: {
     backgroundColor: tema.accentDim,
-    borderColor: tema.accent,
   },
   modTxt: { color: tema.textSecondary, fontSize: 14, fontWeight: '500' },
   modTxtAktif: { color: tema.accent },
-  inputRow: {
-    flexDirection: 'row',
-    gap: 10,
-    alignItems: 'center',
-  },
   input: {
-    flex: 1,
     backgroundColor: tema.bgSecondary,
     borderRadius: tema.radius,
     paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 15,
+    paddingVertical: 15,
+    fontSize: 16,
     color: tema.text,
     borderWidth: 1,
     borderColor: tema.cardBorder,
@@ -130,8 +171,14 @@ const s = StyleSheet.create({
   btn: {
     backgroundColor: tema.accent,
     paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingVertical: 15,
     borderRadius: tema.radius,
+    alignItems: 'center',
   },
-  btnTxt: { color: tema.bg, fontWeight: '700', fontSize: 15 },
+  btnTxt: { color: tema.bg, fontWeight: '800', fontSize: 16 },
+  ipucu: {
+    color: tema.textSecondary,
+    fontSize: 12,
+    textAlign: 'center',
+  },
 });

@@ -83,13 +83,17 @@ export default function DetayScreen({ route, navigation }) {
   return (
     <SafeAreaView style={s.container}>
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
-        <Text style={s.baslik}>{kart.baslik}</Text>
-        {kart.kanca && <Text style={s.kanca}>{kart.kanca}</Text>}
+        <View style={s.heroKart}>
+          <Text style={s.baslik}>{kart.baslik}</Text>
+          {kart.kanca && <Text style={s.kanca}>{kart.kanca}</Text>}
+        </View>
 
         {yukleniyor ? (
           <ActivityIndicator size="large" color={tema.accent} style={{ marginTop: 32 }} />
         ) : (
-          <Text style={s.detay}>{detay}</Text>
+          <View style={s.detayKart}>
+            <Text style={s.detay}>{detay}</Text>
+          </View>
         )}
 
         {ilgili.length > 0 && (
@@ -120,6 +124,9 @@ export default function DetayScreen({ route, navigation }) {
               value={soru}
               onChangeText={setSoru}
               onSubmitEditing={soruGonder}
+              multiline
+              numberOfLines={3}
+              textAlignVertical="top"
             />
             <TouchableOpacity style={s.soruBtn} onPress={soruGonder}>
               <Text style={s.soruBtnTxt}>Gönder</Text>
@@ -139,29 +146,45 @@ export default function DetayScreen({ route, navigation }) {
 
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: tema.bg },
-  scroll: { padding: 20, paddingBottom: 40 },
+  scroll: { padding: 16, paddingBottom: 40 },
+  heroKart: {
+    backgroundColor: tema.cardBg,
+    borderRadius: tema.radius,
+    borderWidth: 1,
+    borderColor: tema.cardBorder,
+    padding: 14,
+    marginBottom: 12,
+  },
   baslik: {
     fontSize: 22,
-    fontWeight: '700',
+    fontWeight: '800',
     color: tema.text,
     marginBottom: 6,
   },
   kanca: {
     fontSize: 14,
     color: tema.textSecondary,
-    marginBottom: 20,
+    marginBottom: 2,
     fontStyle: 'italic',
+    lineHeight: 21,
+  },
+  detayKart: {
+    backgroundColor: tema.cardBg,
+    borderRadius: tema.radius,
+    borderWidth: 1,
+    borderColor: tema.cardBorder,
+    padding: 14,
+    marginBottom: 20,
   },
   detay: {
     fontSize: 15,
     color: tema.text,
     lineHeight: 24,
-    marginBottom: 28,
   },
   ilgiliBolum: { marginBottom: 28 },
   ilgiliBaslik: {
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: '800',
     color: tema.accent,
     marginBottom: 12,
   },
@@ -169,7 +192,7 @@ const s = StyleSheet.create({
     backgroundColor: tema.cardBg,
     borderRadius: tema.radius,
     padding: 14,
-    marginBottom: 8,
+    marginBottom: 9,
     borderWidth: 1,
     borderColor: tema.cardBorder,
   },
@@ -180,9 +203,11 @@ const s = StyleSheet.create({
     marginTop: 3,
   },
   soruBolum: {
-    borderTopWidth: 1,
-    borderTopColor: tema.cardBorder,
-    paddingTop: 20,
+    borderRadius: tema.radius,
+    borderWidth: 1,
+    borderColor: tema.cardBorder,
+    backgroundColor: tema.cardBg,
+    padding: 14,
   },
   soruEtiket: {
     fontSize: 13,
@@ -190,7 +215,7 @@ const s = StyleSheet.create({
     marginBottom: 10,
     fontWeight: '600',
   },
-  soruRow: { flexDirection: 'row', gap: 8 },
+  soruRow: { flexDirection: 'row', gap: 8, alignItems: 'flex-end' },
   soruInput: {
     flex: 1,
     backgroundColor: tema.bgSecondary,
@@ -201,11 +226,13 @@ const s = StyleSheet.create({
     color: tema.text,
     borderWidth: 1,
     borderColor: tema.cardBorder,
+    minHeight: 82,
+    maxHeight: 130,
   },
   soruBtn: {
     backgroundColor: tema.accent,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 13,
     borderRadius: tema.radius,
     justifyContent: 'center',
   },
@@ -215,8 +242,10 @@ const s = StyleSheet.create({
     color: tema.text,
     lineHeight: 22,
     marginTop: 14,
-    backgroundColor: tema.cardBg,
+    backgroundColor: tema.bgSecondary,
     borderRadius: tema.radius,
     padding: 14,
+    borderWidth: 1,
+    borderColor: tema.cardBorder,
   },
 });
