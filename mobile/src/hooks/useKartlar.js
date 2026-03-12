@@ -26,7 +26,70 @@ function jsonCikar(metin) {
     }
   }
 
+  // JSON dizi kesik geldiyse (truncate), tamamlanmis objectleri kurtar.
+  const parcali = kesikJsondanKartlariTopla(temiz);
+  if (Array.isArray(parcali) && parcali.length > 0) {
+    return parcali;
+  }
+
   return null;
+}
+
+function kesikJsondanKartlariTopla(metin) {
+  const basla = metin.indexOf('[');
+  if (basla === -1) return null;
+
+  const kartlar = [];
+  let depth = 0;
+  let objeBaslangic = -1;
+  let inString = false;
+  let escape = false;
+
+  for (let i = basla; i < metin.length; i += 1) {
+    const ch = metin[i];
+
+    if (inString) {
+      if (escape) {
+        escape = false;
+        continue;
+      }
+      if (ch === '\\') {
+        escape = true;
+        continue;
+      }
+      if (ch === '"') inString = false;
+      continue;
+    }
+
+    if (ch === '"') {
+      inString = true;
+      continue;
+    }
+
+    if (ch === '{') {
+      depth += 1;
+      if (depth === 1) objeBaslangic = i;
+      continue;
+    }
+
+    if (ch === '}') {
+      if (depth > 0) depth -= 1;
+      if (depth === 0 && objeBaslangic !== -1) {
+        const parca = metin.slice(objeBaslangic, i + 1);
+        try {
+          const parsed = JSON.parse(parca);
+          if (parsed?.baslik && parsed?.kanca) {
+            kartlar.push(parsed);
+          }
+        } catch {
+          // Bu parcayi atla, taramaya devam et.
+        }
+        objeBaslangic = -1;
+      }
+    }
+  }
+
+  return kartlar.length > 0 ? kartlar : null;
 }
 
 export function useKartlar(mod, kullaniciId = null) {
