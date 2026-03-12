@@ -7,6 +7,7 @@ import {
   StyleSheet,
   SafeAreaView,
 } from 'react-native';
+import { useLimitContext } from '../context/LimitContext';
 import { tema } from '../theme';
 
 const MODLAR = [
@@ -17,10 +18,12 @@ const MODLAR = [
 export default function HomeScreen({ navigation }) {
   const [girdi, setGirdi] = useState('');
   const [aktifMod, setAktifMod] = useState('bilgi');
+  const { kalan, uyari, limitAsildi } = useLimitContext();
 
   const ara = () => {
     const metin = girdi.trim();
     if (!metin) return;
+    if (limitAsildi) return;
     navigation.navigate('Kartlar', { konu: metin, mod: aktifMod });
     setGirdi('');
   };
@@ -74,6 +77,12 @@ export default function HomeScreen({ navigation }) {
         </TouchableOpacity>
 
         <Text style={s.ipucu}>Kısa ve net bir konu yazman daha iyi sonuç verir.</Text>
+        {uyari && (
+          <Text style={s.limitUyari}>Günlük limitine yaklaşıyorsun — {kalan} istek kaldı.</Text>
+        )}
+        {limitAsildi && (
+          <Text style={s.limitHata}>Günlük limitin doldu. Yarın tekrar gel.</Text>
+        )}
       </View>
     </SafeAreaView>
   );
@@ -180,5 +189,17 @@ const s = StyleSheet.create({
     color: tema.textSecondary,
     fontSize: 12,
     textAlign: 'center',
+  },
+  limitUyari: {
+    color: '#f6ad55',
+    fontSize: 12,
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  limitHata: {
+    color: tema.danger,
+    fontSize: 12,
+    textAlign: 'center',
+    marginTop: 4,
   },
 });

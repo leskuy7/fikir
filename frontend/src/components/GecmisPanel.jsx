@@ -10,8 +10,21 @@ function tarihFormat(tarih) {
 }
 
 export default function GecmisPanel({ kullaniciId, onKapat, onKonuSec }) {
-  const [konusmalar, setKonusmalar] = useState([]);
-  const [yukleniyor, setYukleniyor] = useState(true);
+  const [durum, setDurum] = useState(() => ({
+    anahtar: kullaniciId,
+    konusmalar: [],
+    yukleniyor: true,
+    gecmisHata: null,
+  }));
+
+  const aktifDurum = durum.anahtar === kullaniciId
+    ? durum
+    : {
+      anahtar: kullaniciId,
+      konusmalar: [],
+      yukleniyor: true,
+      gecmisHata: null,
+    };
 
   useEffect(() => {
     const handleEsc = (e) => { if (e.key === 'Escape') onKapat(); };
@@ -21,14 +34,26 @@ export default function GecmisPanel({ kullaniciId, onKapat, onKonuSec }) {
 
   useEffect(() => {
     let iptal = false;
-    setYukleniyor(true);
     konusmalariGetir(kullaniciId)
       .then((veri) => {
-        if (!iptal) setKonusmalar(veri);
+        if (!iptal) {
+          setDurum({
+            anahtar: kullaniciId,
+            konusmalar: veri,
+            yukleniyor: false,
+            gecmisHata: null,
+          });
+        }
       })
-      .catch(() => {})
-      .finally(() => {
-        if (!iptal) setYukleniyor(false);
+      .catch(() => {
+        if (!iptal) {
+          setDurum({
+            anahtar: kullaniciId,
+            konusmalar: [],
+            yukleniyor: false,
+            gecmisHata: 'Geçmiş yüklenemedi. Lütfen tekrar dene.',
+          });
+        }
       });
     return () => { iptal = true; };
   }, [kullaniciId]);
@@ -45,12 +70,15 @@ export default function GecmisPanel({ kullaniciId, onKapat, onKonuSec }) {
         </div>
 
         <div className="gecmis-panel__liste">
-          {yukleniyor && <p className="gecmis-panel__durum">Yükleniyor...</p>}
-          {!yukleniyor && konusmalar.length === 0 && (
+          {aktifDurum.yukleniyor && <p className="gecmis-panel__durum">Yükleniyor...</p>}
+          {!aktifDurum.yukleniyor && aktifDurum.gecmisHata && (
+            <p className="gecmis-panel__durum">{aktifDurum.gecmisHata}</p>
+          )}
+          {!aktifDurum.yukleniyor && !aktifDurum.gecmisHata && aktifDurum.konusmalar.length === 0 && (
             <p className="gecmis-panel__durum">Henüz bir arama yapmadın.</p>
           )}
-          {!yukleniyor &&
-            konusmalar.map((k) => (
+          {!aktifDurum.yukleniyor &&
+            aktifDurum.konusmalar.map((k) => (
               <button
                 key={k.id}
                 type="button"

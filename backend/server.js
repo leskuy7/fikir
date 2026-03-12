@@ -3,7 +3,11 @@ import cors from 'cors';
 import 'dotenv/config';
 import admin from 'firebase-admin';
 import { getSystemPrompt } from './prompts/sistem.js';
-import { limitKontrol, limitArtir } from './middleware/rateLimiter.js';
+import {
+  limitArtir,
+  limitDurumGetir,
+  LimitServisiHatasi,
+} from './middleware/rateLimiter.js';
 
 if (process.env.FIREBASE_SERVICE_ACCOUNT) {
   try {
@@ -263,6 +267,21 @@ function geminiYanitMetni(veri) {
     .trim() || '';
 }
 
+function apiHata(res, status, kod, hata, extra = {}) {
+  return res.status(status).json({ ok: false, kod, hata, ...extra });
+}
+
+function apiBasari(res, data = {}) {
+  return res.json({ ok: true, ...data });
+}
+
+function limitHeaderYaz(res, limitDurum) {
+  if (!limitDurum) return;
+  res.setHeader('x-limit-total', String(limitDurum.limit));
+  res.setHeader('x-limit-remaining', String(limitDurum.kalan));
+  res.setHeader('x-limit-used', String(limitDurum.kullanilan));
+}
+
 app.use(
   cors({
     origin(origin, callback) {
@@ -296,31 +315,61 @@ setInterval(() => {
 }, 60 * 1000);
 
 app.post('/api/mesaj', async (req, res) => {
-  const { mesajlar, mod, kullaniciId, idToken } = req.body;
+  const { mesajlar, mod, kullaniciId } = req.body;
   const aramOturumId = req.headers['x-arama-oturumu'] || null;
+  const authHeader = req.headers.authorization || '';
+  const idToken = authHeader.startsWith('Bearer ')
+    ? authHeader.slice(7).trim()
+    : null;
 
   if (!mesajlar || !Array.isArray(mesajlar) || mesajlar.length === 0) {
-    return res.status(400).json({ hata: 'Geçersiz istek: mesajlar dizisi gerekli' });
+    return apiHata(res, 400, 'ISTEK_HATASI', 'Gecersiz istek: mesajlar dizisi gerekli');
   }
   if (!GECERLI_MODLAR.includes(mod)) {
-    return res.status(400).json({ hata: 'Geçersiz mod' });
+    return apiHata(res, 400, 'ISTEK_HATASI', 'Gecersiz mod');
   }
 
   let dogrulanmisUid = null;
   if (idToken) {
     dogrulanmisUid = await tokenDogrula(idToken);
     if (!dogrulanmisUid) {
-      return res.status(401).json({ hata: 'Geçersiz oturum tokeni' });
+      return apiHata(res, 401, 'GIRIS_GEREKLI', 'Gecersiz oturum tokeni');
     }
+  }
+
+  if (kullaniciId && !dogrulanmisUid) {
+    return apiHata(res, 401, 'GIRIS_GEREKLI', 'Bu istek icin giris yapmalisin');
+  }
+
+  if (kullaniciId && dogrulanmisUid && kullaniciId !== dogrulanmisUid) {
+    return apiHata(res, 403, 'YETKI_REDDEDILDI', 'Kullanici yetkisi dogrulanamadi');
   }
 
   const limitAnahtari = dogrulanmisUid
     ? `uid:${dogrulanmisUid}`
     : req.ip || 'anon';
-  if (await limitKontrol(limitAnahtari)) {
-    return res.status(429).json({
-      hata: 'Günlük limit doldu',
-      mesaj: 'Üye olarak daha fazla kullanım hakkı kazanabilirsin',
+
+  let limitDurum;
+  try {
+    limitDurum = await limitDurumGetir(limitAnahtari);
+  } catch (err) {
+    if (err instanceof LimitServisiHatasi) {
+      return apiHata(
+        res,
+        503,
+        'LIMIT_SERVISI_KULLANILAMIYOR',
+        'Limit servisi gecici olarak kullanilamiyor',
+        { retry: false }
+      );
+    }
+    throw err;
+  }
+
+  limitHeaderYaz(res, limitDurum);
+  if (limitDurum.limitAsildi) {
+    return apiHata(res, 429, 'LIMIT_DOLDU', 'Gunluk limit doldu', {
+      mesaj: 'Uye olarak daha fazla kullanim hakki kazanabilirsin',
+      retry: false,
     });
   }
 
@@ -333,7 +382,7 @@ app.post('/api/mesaj', async (req, res) => {
   }
 
   if (!process.env.GEMINI_API_KEY) {
-    return res.status(500).json({ hata: 'GEMINI_API_KEY tanimli degil' });
+    return apiHata(res, 500, 'SUNUCU_HATASI', 'GEMINI_API_KEY tanimli degil');
   }
 
   if (mod === 'konu_kilidi') {
@@ -365,7 +414,9 @@ app.post('/api/mesaj', async (req, res) => {
     if (!geminiResponse.ok) {
       const hata = await geminiResponse.json().catch(() => ({}));
       console.error('Gemini hatası:', hata);
-      return res.status(502).json({ hata: 'AI servisi şu an yanıt vermiyor' });
+      return apiHata(res, 502, 'AI_SERVISI_HATASI', 'AI servisi su an yanit vermiyor', {
+        retry: true,
+      });
     }
 
     const veri = await geminiResponse.json();
@@ -402,8 +453,7 @@ app.post('/api/mesaj', async (req, res) => {
         }
 
         if (!kartlar) {
-          return res.status(502).json({
-            hata: 'AI çıktısı geçersiz formatta',
+          return apiHata(res, 502, 'AI_FORMAT_HATASI', 'AI ciktisi gecersiz formatta', {
             detay: 'Kart JSON üretimi tamamlanamadi',
           });
         }
@@ -411,25 +461,39 @@ app.post('/api/mesaj', async (req, res) => {
         const tekMod = mod === 'bilgi_tek' || mod === 'fikir_tek';
         const zatenSayildi = tekMod && aramOturumId && sayilanOturumlar.has(aramOturumId);
         if (!zatenSayildi) {
-          await limitArtir(limitAnahtari);
+          const yeniLimitDurum = await limitArtir(limitAnahtari);
+          limitHeaderYaz(res, yeniLimitDurum);
           if (tekMod && aramOturumId) sayilanOturumlar.set(aramOturumId, Date.now());
         }
-        return res.json({ yanit: JSON.stringify(kartlar) });
+        return apiBasari(res, { yanit: JSON.stringify(kartlar) });
       } catch {
-        return res.status(502).json({ hata: 'AI çıktısı parse edilemedi' });
+        return apiHata(res, 502, 'AI_PARSE_HATASI', 'AI ciktisi parse edilemedi', {
+          retry: true,
+        });
       }
     }
 
-    await limitArtir(limitAnahtari);
-    res.json({ yanit: yanitMetni });
+    const yeniLimitDurum = await limitArtir(limitAnahtari);
+    limitHeaderYaz(res, yeniLimitDurum);
+    return apiBasari(res, { yanit: yanitMetni });
   } catch (err) {
     console.error('Sunucu hatası:', err);
-    res.status(500).json({ hata: 'Sunucu hatası' });
+    if (err instanceof LimitServisiHatasi) {
+      return apiHata(
+        res,
+        503,
+        'LIMIT_SERVISI_KULLANILAMIYOR',
+        'Limit servisi gecici olarak kullanilamiyor',
+        { retry: false }
+      );
+    }
+    return apiHata(res, 500, 'SUNUCU_HATASI', 'Sunucu hatasi');
   }
 });
 
 app.get('/health', (req, res) => {
-  res.json({
+  apiBasari(res, {
+    kod: 'SAGLIKLI',
     durum: 'calisiyor',
     provider: 'gemini',
     model: GEMINI_MODEL,

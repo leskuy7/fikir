@@ -10,6 +10,7 @@ import {
   SafeAreaView,
 } from 'react-native';
 import { mesajGonder } from '../services/api';
+import { useLimitContext } from '../context/LimitContext';
 import { tema } from '../theme';
 
 function jsonCikar(metin) {
@@ -25,6 +26,7 @@ function jsonCikar(metin) {
 
 export default function DetayScreen({ route, navigation }) {
   const { kart, mod } = route.params;
+  const { sunucudanGuncelle } = useLimitContext();
   const [detay, setDetay] = useState(null);
   const [ilgili, setIlgili] = useState([]);
   const [yukleniyor, setYukleniyor] = useState(true);
@@ -37,13 +39,23 @@ export default function DetayScreen({ route, navigation }) {
       setYukleniyor(true);
       try {
         const mesaj = `${kart.baslik}\n\n${kart.kanca || ''}`;
-        const [d, i] = await Promise.all([
+        const sonuclar = await Promise.allSettled([
           mesajGonder({ mesajlar: [{ role: 'user', content: mesaj }], mod: 'detay' }),
           mesajGonder({ mesajlar: [{ role: 'user', content: mesaj }], mod: 'ilgili' }),
         ]);
-        setDetay(d);
-        const parsed = jsonCikar(i);
-        if (Array.isArray(parsed)) setIlgili(parsed);
+
+        if (sonuclar[0].status === 'fulfilled') {
+          setDetay(sonuclar[0].value.yanit);
+          sunucudanGuncelle(sonuclar[0].value.limit);
+        } else {
+          setDetay('İçerik yüklenemedi.');
+        }
+
+        if (sonuclar[1].status === 'fulfilled') {
+          sunucudanGuncelle(sonuclar[1].value.limit);
+          const parsed = jsonCikar(sonuclar[1].value.yanit);
+          if (Array.isArray(parsed)) setIlgili(parsed);
+        }
       } catch {
         setDetay('İçerik yüklenemedi.');
       } finally {
@@ -58,7 +70,7 @@ export default function DetayScreen({ route, navigation }) {
     if (!t || cevapYukleniyor) return;
     setCevapYukleniyor(true);
     try {
-      const yanit = await mesajGonder({
+      const { yanit, limit } = await mesajGonder({
         mesajlar: [
           {
             role: 'user',
@@ -67,6 +79,7 @@ export default function DetayScreen({ route, navigation }) {
         ],
         mod: 'konu_kilidi',
       });
+      sunucudanGuncelle(limit);
       setCevap(yanit);
       setSoru('');
     } catch {

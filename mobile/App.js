@@ -2,6 +2,7 @@ import React from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { LimitProvider } from './src/context/LimitContext';
 import HomeScreen from './src/screens/HomeScreen';
 import KartlarScreen from './src/screens/KartlarScreen';
 import DetayScreen from './src/screens/DetayScreen';
@@ -17,29 +18,31 @@ const screenOptions = {
 
 export default function App() {
   return (
-    <NavigationContainer>
-      <StatusBar style="light" />
-      <Stack.Navigator screenOptions={screenOptions}>
-        <Stack.Screen
-          name="Home"
-          component={HomeScreen}
-          options={{ headerShown: false }}
-        />
-        <Stack.Screen
-          name="Kartlar"
-          component={KartlarScreen}
-          options={({ route }) => ({
-            title: route.params?.konu || 'Kartlar',
-          })}
-        />
-        <Stack.Screen
-          name="Detay"
-          component={DetayScreen}
-          options={({ route }) => ({
-            title: route.params?.kart?.baslik || 'Detay',
-          })}
-        />
-      </Stack.Navigator>
-    </NavigationContainer>
+    <LimitProvider>
+      <NavigationContainer>
+        <StatusBar style="light" />
+        <Stack.Navigator screenOptions={screenOptions}>
+          <Stack.Screen
+            name="Home"
+            component={HomeScreen}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="Kartlar"
+            component={KartlarScreen}
+            options={({ route }) => ({
+              title: route.params?.konu || 'Kartlar',
+            })}
+          />
+          <Stack.Screen
+            name="Detay"
+            component={DetayScreen}
+            options={({ route }) => ({
+              title: route.params?.kart?.baslik || 'Detay',
+            })}
+          />
+        </Stack.Navigator>
+      </NavigationContainer>
+    </LimitProvider>
   );
 }

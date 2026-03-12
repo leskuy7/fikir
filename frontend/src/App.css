@@ -148,6 +148,11 @@
   max-width: 320px;
 }
 
+.app__limit-uyari--hata {
+  color: #b83232;
+  background: rgba(229, 62, 62, 0.12);
+}
+
 /* ── Mod secici ────────────────────── */
 .mod-secici {
   display: flex;
@@ -408,6 +413,7 @@
   font-weight: 400;
   display: -webkit-box;
   -webkit-line-clamp: 3;
+  line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }

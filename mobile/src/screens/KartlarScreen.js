@@ -9,6 +9,7 @@ import {
   SafeAreaView,
 } from 'react-native';
 import { useKartlar } from '../hooks/useKartlar';
+import { useLimitContext } from '../context/LimitContext';
 import { tema } from '../theme';
 
 const EMOJILER_BILGI = ['💡', '🔭', '⚡', '🧩', '🔄', '🌍'];
@@ -16,7 +17,11 @@ const EMOJILER_FIKIR = ['🚀', '💡', '🎯', '⚡', '🌟', '🔧'];
 
 export default function KartlarScreen({ route, navigation }) {
   const { konu, mod } = route.params;
-  const { kartlar, yukleniyor, hata, kartlariGetir } = useKartlar(mod);
+  const { limitDoldu, sunucudanGuncelle } = useLimitContext();
+  const { kartlar, yukleniyor, hata, kartlariGetir } = useKartlar(mod, null, {
+    onLimitDoldu: limitDoldu,
+    onLimitGuncelle: sunucudanGuncelle,
+  });
 
   useEffect(() => {
     kartlariGetir(konu);

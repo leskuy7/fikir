@@ -22,9 +22,22 @@ export default function App() {
   const [tema, setTema] = useState(() => {
     return localStorage.getItem(TEMA_KEY) || 'kozmik';
   });
-  const { kullanici, yukleniyor: authYukleniyor, girisYap, cikisYap } = useAuth();
+  const {
+    kullanici,
+    yukleniyor: authYukleniyor,
+    hata: authHata,
+    girisYap,
+    cikisYap,
+  } = useAuth();
   const kullaniciId = kullanici?.uid || null;
-  const { kalan, uyari, limitAsildi, artir, limitDoldu } = useLimit(kullaniciId);
+  const {
+    kalan,
+    uyari,
+    limitAsildi,
+    artir,
+    limitDoldu,
+    sunucudanGuncelle,
+  } = useLimit(kullaniciId);
 
   useEffect(() => {
     document.body.setAttribute('data-theme', tema);
@@ -65,6 +78,9 @@ export default function App() {
       </div>
 
       <ModSecici aktif={aktifMod} onChange={setAktifMod} />
+      {authHata && (
+        <p className="app__limit-uyari app__limit-uyari--hata">{authHata}</p>
+      )}
       {uyari && (
         <p className="app__limit-uyari">
           Günlük limitine yaklaşıyorsun — {kalan} istek kaldı.
@@ -73,14 +89,14 @@ export default function App() {
       <div className={aktifMod === 'bilgi' ? 'app__mod' : 'app__mod app__mod--hidden'}>
         <BilgiKartlari
           kullaniciId={kullaniciId}
-          limitBag={{ artir, limitDoldu, limitAsildi }}
+          limitBag={{ artir, limitDoldu, limitAsildi, sunucudanGuncelle }}
           gecmisIstek={gecmisIstek?.mod === 'bilgi' ? gecmisIstek : null}
         />
       </div>
       <div className={aktifMod === 'fikir' ? 'app__mod' : 'app__mod app__mod--hidden'}>
         <FikirKartlari
           kullaniciId={kullaniciId}
-          limitBag={{ artir, limitDoldu, limitAsildi }}
+          limitBag={{ artir, limitDoldu, limitAsildi, sunucudanGuncelle }}
           gecmisIstek={gecmisIstek?.mod === 'fikir' ? gecmisIstek : null}
         />
       </div>

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useKartlar } from '../hooks/useKartlar.js';
 import YukleniyorSpinner from './YukleniyorSpinner.jsx';
 import KartDetay from './KartDetay.jsx';
@@ -8,8 +8,8 @@ import KonuGirisi from './KonuGirisi.jsx';
 const KART_EMOJILERI = ['🚀', '💡', '🎯', '⚡', '🌟', '🔧', '📈', '🔄'];
 
 export default function FikirKartlari({ kullaniciId, limitBag = {}, gecmisIstek = null }) {
-  const { artir, limitDoldu, limitAsildi } = limitBag;
-  const [girdi, setGirdi] = useState('');
+  const { artir, limitDoldu, limitAsildi, sunucudanGuncelle } = limitBag;
+  const girdiRef = useRef(null);
   const {
     konu,
     kartlar,
@@ -28,16 +28,17 @@ export default function FikirKartlari({ kullaniciId, limitBag = {}, gecmisIstek 
   } = useKartlar('fikir', kullaniciId, {
     onBasari: artir,
     onLimitDoldu: limitDoldu,
+    onLimitGuncelle: sunucudanGuncelle,
   });
 
   const ara = (e) => {
     e.preventDefault();
-    kartlariGetir(girdi);
+    kartlariGetir(girdiRef.current?.value || '');
   };
 
   useEffect(() => {
     if (!gecmisIstek?.id || !gecmisIstek.konu) return;
-    setGirdi(gecmisIstek.konu);
+    if (girdiRef.current) girdiRef.current.value = gecmisIstek.konu;
     kartlariGetir(gecmisIstek.konu);
   }, [gecmisIstek, kartlariGetir]);
 
@@ -46,9 +47,9 @@ export default function FikirKartlari({ kullaniciId, limitBag = {}, gecmisIstek 
       <form onSubmit={ara} className="konu-formu">
         <div className="konu-formu__ikon" aria-hidden="true">&#x1F4A1;</div>
         <input
+          ref={girdiRef}
           type="text"
-          value={girdi}
-          onChange={(e) => setGirdi(e.target.value)}
+          defaultValue=""
           placeholder="Hangi alanda fikir arıyorsun?"
           className="konu-formu__input"
           aria-label="Aranacak konu"

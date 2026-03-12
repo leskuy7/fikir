@@ -1,7 +1,7 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 
-const MISAFIR_LIMIT = 10;
-const KAYITLI_LIMIT = 30;
+const MISAFIR_LIMIT = 5;
+const KAYITLI_LIMIT = 20;
 
 function bugun() {
   return new Date().toISOString().slice(0, 10);
@@ -26,35 +26,57 @@ function oku(key) {
 function yaz(key, data) {
   try {
     localStorage.setItem(key, JSON.stringify(data));
-  } catch {}
+  } catch {
+    // Storage yazma hatasi kritik degil.
+  }
 }
 
 export function useLimit(kullaniciId = null) {
   const key = limitKey(kullaniciId);
   const limit = kullaniciId ? KAYITLI_LIMIT : MISAFIR_LIMIT;
-  const [durum, setDurum] = useState(() => oku(key));
+  const [yerelDurum, setYerelDurum] = useState(() => ({ key, data: oku(key) }));
+  const [sunucuDurumu, setSunucuDurumu] = useState({ key: null, limit: null });
 
-  useEffect(() => {
-    setDurum(oku(key));
-  }, [key]);
+  const durum = yerelDurum.key === key ? yerelDurum.data : oku(key);
+  const sunucuLimit = sunucuDurumu.key === key ? sunucuDurumu.limit : null;
 
   const artir = useCallback((miktar = 1) => {
     const data = oku(key);
     data.sayi = Math.min(data.sayi + miktar, limit);
     yaz(key, data);
-    setDurum(data);
+    setYerelDurum({ key, data });
   }, [key, limit]);
 
   const limitDoldu = useCallback(() => {
     const data = oku(key);
     data.sayi = limit;
     yaz(key, data);
-    setDurum(data);
+    setYerelDurum({ key, data });
   }, [key, limit]);
 
-  const kalan = Math.max(0, limit - durum.sayi);
-  const uyari = durum.sayi >= limit - 2 && durum.sayi < limit;
-  const limitAsildi = durum.sayi >= limit;
+  const sunucudanGuncelle = useCallback((limitBilgisi) => {
+    if (!limitBilgisi) return;
 
-  return { kalan, uyari, limitAsildi, artir, limitDoldu };
+    const toplam = Number(limitBilgisi.toplam);
+    const kalan = Number(limitBilgisi.kalan);
+    const kullanilan = Number(limitBilgisi.kullanilan);
+    if ([toplam, kalan, kullanilan].some((v) => Number.isNaN(v))) return;
+
+    setSunucuDurumu({ key, limit: { toplam, kalan, kullanilan } });
+
+    const data = oku(key);
+    data.sayi = Math.max(0, Math.min(kullanilan, limit));
+    yaz(key, data);
+    setYerelDurum({ key, data });
+  }, [key, limit]);
+
+  const efektifToplam = sunucuLimit?.toplam ?? limit;
+  const efektifKalan = Number.isInteger(sunucuLimit?.kalan)
+    ? Math.max(0, sunucuLimit.kalan)
+    : Math.max(0, limit - durum.sayi);
+  const efektifKullanilan = Math.max(0, efektifToplam - efektifKalan);
+  const uyari = efektifKullanilan >= efektifToplam - 2 && efektifKullanilan < efektifToplam;
+  const limitAsildi = efektifKalan <= 0;
+
+  return { kalan: efektifKalan, uyari, limitAsildi, artir, limitDoldu, sunucudanGuncelle };
 }

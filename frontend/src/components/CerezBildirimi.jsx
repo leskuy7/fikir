@@ -1,15 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 
 const CEREZ_KEY = 'fikir-kutusu-cerez-kabul';
 
 export default function CerezBildirimi({ onGizlilikAc }) {
-  const [gorunur, setGorunur] = useState(false);
-
-  useEffect(() => {
-    if (!localStorage.getItem(CEREZ_KEY)) {
-      setGorunur(true);
-    }
-  }, []);
+  const [gorunur, setGorunur] = useState(() => !localStorage.getItem(CEREZ_KEY));
 
   const kabul = () => {
     localStorage.setItem(CEREZ_KEY, '1');
