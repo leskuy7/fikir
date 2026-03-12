@@ -2,14 +2,31 @@ import { useState, useCallback } from 'react';
 import { mesajGonder } from '../services/api';
 
 function jsonCikar(metin) {
-  const basla = metin.indexOf('[');
-  const bitis = metin.lastIndexOf(']') + 1;
-  if (basla === -1 || bitis <= basla) return null;
-  try {
-    return JSON.parse(metin.slice(basla, bitis));
-  } catch {
-    return null;
+  if (typeof metin !== 'string') return null;
+  const temiz = metin
+    .trim()
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/```$/i, '')
+    .trim();
+
+  const adaylar = [temiz];
+  const basla = temiz.indexOf('[');
+  const bitis = temiz.lastIndexOf(']') + 1;
+  if (basla !== -1 && bitis > basla) {
+    adaylar.push(temiz.slice(basla, bitis));
   }
+
+  for (const aday of adaylar) {
+    try {
+      const parsed = JSON.parse(aday);
+      if (Array.isArray(parsed)) return parsed;
+      if (Array.isArray(parsed?.kartlar)) return parsed.kartlar;
+    } catch {
+      // Sonraki adayi dene
+    }
+  }
+
+  return null;
 }
 
 export function useKartlar(mod, kullaniciId = null) {

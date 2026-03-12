@@ -40,10 +40,36 @@ const MAX_TOKENS_BY_MOD = {
 };
 
 const GECERLI_MODLAR = ['bilgi', 'fikir', 'detay', 'ilgili', 'konu_kilidi'];
+const JSON_KART_MODLARI = new Set(['bilgi', 'fikir', 'ilgili']);
 const IZNLI_ORIGINLER = new Set([
   'https://fikir-nine.vercel.app',
   'http://localhost:5173',
 ]);
+
+function geminiJsonSchema(mod) {
+  if (!JSON_KART_MODLARI.has(mod)) return null;
+  return {
+    type: 'ARRAY',
+    minItems: mod === 'ilgili' ? 4 : 6,
+    maxItems: mod === 'ilgili' ? 4 : 6,
+    items: {
+      type: 'OBJECT',
+      properties: {
+        baslik: { type: 'STRING' },
+        kanca: { type: 'STRING' },
+      },
+      required: ['baslik', 'kanca'],
+      propertyOrdering: ['baslik', 'kanca'],
+    },
+  };
+}
+
+function kartJsonuNormalizeEt(metin) {
+  const parsed = JSON.parse(metin);
+  if (Array.isArray(parsed)) return parsed;
+  if (Array.isArray(parsed?.kartlar)) return parsed.kartlar;
+  return null;
+}
 
 function konuKilidiParse(userContent) {
   if (!userContent || typeof userContent !== 'string') return null;
@@ -152,6 +178,7 @@ app.post('/api/mesaj', async (req, res) => {
   }
 
   try {
+    const responseSchema = geminiJsonSchema(mod);
     const geminiResponse = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${process.env.GEMINI_API_KEY}`,
       {
@@ -166,6 +193,10 @@ app.post('/api/mesaj', async (req, res) => {
         contents: geminiIcerikleriniHazirla(messages),
         generationConfig: {
           maxOutputTokens: maxTokens,
+          ...(responseSchema && {
+            responseMimeType: 'application/json',
+            responseSchema,
+          }),
         },
       }),
       }
@@ -179,6 +210,19 @@ app.post('/api/mesaj', async (req, res) => {
 
     const veri = await geminiResponse.json();
     const yanitMetni = geminiYanitMetni(veri);
+
+    if (JSON_KART_MODLARI.has(mod)) {
+      try {
+        const kartlar = kartJsonuNormalizeEt(yanitMetni);
+        if (!Array.isArray(kartlar) || kartlar.length === 0) {
+          return res.status(502).json({ hata: 'AI çıktısı geçersiz formatta' });
+        }
+        await limitArtir(limitAnahtari);
+        return res.json({ yanit: JSON.stringify(kartlar) });
+      } catch {
+        return res.status(502).json({ hata: 'AI çıktısı parse edilemedi' });
+      }
+    }
 
     await limitArtir(limitAnahtari);
     res.json({ yanit: yanitMetni });
