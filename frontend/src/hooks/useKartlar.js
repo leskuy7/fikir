@@ -139,11 +139,9 @@ async function kartlariAsamaliGetir({ konuMetni, tekilMod, kullaniciId, hedefAde
     }
   };
 
-  // Ilk dalgayi paralel atarak ilk kartlarin daha hizli gelmesini sagla.
   const ilkDalga = Array.from({ length: hedefAdet }, () => deneVeEkle());
   await Promise.allSettled(ilkDalga);
 
-  // Eksik kart kalirsa kisa bir telafi turu yap.
   let telafi = 0;
   while (biriken.length < hedefAdet && telafi < 4 && !limitDoldu) {
     await deneVeEkle();
