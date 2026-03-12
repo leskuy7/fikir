@@ -142,11 +142,9 @@ async function kartlariAsamaliGetir({ konuMetni, tekilMod, kullaniciId, hedefAde
     await bekle(kartGecikmeMs);
   };
 
-  const bekleyen = Array.from({ length: hedefAdet }, () => dene());
-  while (bekleyen.length > 0 && biriken.length < hedefAdet) {
-    const yarisanlar = bekleyen.map((p, index) => p.then((kart) => ({ index, kart })));
-    const { index, kart } = await Promise.race(yarisanlar);
-    bekleyen.splice(index, 1);
+  // Kartlar sirayla istenir: biri bitmeden digeri baslamaz.
+  for (let i = 0; i < hedefAdet && !limitDoldu; i++) {
+    const kart = await dene();
     await kartEkle(kart);
   }
 
