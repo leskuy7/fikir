@@ -3,11 +3,17 @@ import { mesajGonder } from '../services/api.js';
 import { kartArandiBildir, kartTiklandiBildir } from '../services/analytics.js';
 import { konusmaKaydet } from '../services/firestore.js';
 
-function hataMesajiniGetir(kod, fallback) {
+function hataMesajiniGetir(kod, fallback, detay = null) {
+  const upstreamStatus = detay?.body?.upstreamStatus;
+  const model = detay?.body?.model;
+
   if (kod === 'LIMIT_DOLDU') return 'Gunluk limitin doldu. Yarin tekrar gel veya uye ol.';
   if (kod === 'GIRIS_GEREKLI') return 'Oturumun sona ermis. Lutfen yeniden giris yap.';
   if (kod === 'YETKI_REDDEDILDI') return 'Bu islem icin yetkin bulunmuyor.';
   if (kod === 'AI_SERVISI_HATASI' || kod === 'SERVIS_GECICI_HATA') {
+    if (upstreamStatus === 429) return 'AI kotasi gecici olarak dolu. Birazdan tekrar dene.';
+    if (upstreamStatus === 403) return 'AI erisim izni reddedildi. API anahtari/proje yetkisini kontrol et.';
+    if (upstreamStatus === 404) return `Model bulunamadi (${model || 'bilinmiyor'}).`;
     return 'Servis gecici olarak yanit veremiyor. Birazdan tekrar dene.';
   }
   if (kod === 'LIMIT_SERVISI_KULLANILAMIYOR') {
@@ -194,12 +200,21 @@ export function useKartlar(
           }
         }
       } catch (err) {
+        if (err?.body?.upstreamStatus) {
+          console.error('AI upstream hatasi:', {
+            kod: err?.kod,
+            status: err?.status,
+            upstreamStatus: err?.body?.upstreamStatus,
+            model: err?.body?.model,
+            body: err?.body,
+          });
+        }
         onLimitGuncelle?.(err?.limit || null);
         if (err.message === 'LIMIT_DOLDU') {
           onLimitDoldu?.();
-          setHata(hataMesajiniGetir(err.message, 'Gunluk limitin doldu.'));
+          setHata(hataMesajiniGetir(err.message, 'Gunluk limitin doldu.', err));
         } else {
-          setHata(hataMesajiniGetir(err.message, 'Bir seyler ters gitti. Tekrar dene.'));
+          setHata(hataMesajiniGetir(err.message, 'Bir seyler ters gitti. Tekrar dene.', err));
         }
       } finally {
         setYukleniyor(false);
