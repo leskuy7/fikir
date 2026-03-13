@@ -11,11 +11,35 @@ export class LimitServisiHatasi extends Error {
 }
 
 let redis = null;
+let redisHazir = false;
+
 if (process.env.REDIS_URL) {
   try {
-    redis = new Redis(process.env.REDIS_URL);
-    redis.on('error', (err) => console.warn('Redis bağlantı hatası:', err.message));
+    redis = new Redis(process.env.REDIS_URL, {
+      connectTimeout: 3000,
+      maxRetriesPerRequest: 1,
+      retryStrategy(times) {
+        if (times > 3) return null; // Stop retrying after 3 attempts
+        return Math.min(times * 200, 1000);
+      },
+    });
+    
+    redis.on('ready', () => {
+      redisHazir = true;
+      console.log('Redis bağlandı ve hazır.');
+    });
+
+    redis.on('error', (err) => {
+      redisHazir = false;
+      console.warn('Redis bağlantı hatası:', err.message);
+    });
+    
+    redis.on('end', () => {
+      redisHazir = false;
+    });
+
   } catch (err) {
+    redisHazir = false;
     console.warn('Redis başlatılamadı:', err.message);
   }
 }
@@ -46,13 +70,14 @@ function geceYarisiSaniye() {
 export async function limitDurumGetir(anahtar) {
   const limit = getLimit(anahtar);
 
-  if (redis) {
+  if (redis && redisHazir) {
     try {
       const sayi = await redis.get(`limit:${anahtar}`);
       const kullanilan = sayi !== null ? parseInt(sayi, 10) : 0;
       return limitiHesapla(limit, Number.isNaN(kullanilan) ? 0 : kullanilan);
     } catch {
-      throw new LimitServisiHatasi();
+      // Redis errors gracefully fallback instead of throwing LimitServisiHatasi
+      console.warn('Redis get hatasi, bellege dusuluyor');
     }
   }
 
@@ -69,7 +94,7 @@ export async function limitDurumGetir(anahtar) {
 export async function limitArtir(anahtar) {
   const limit = getLimit(anahtar);
 
-  if (redis) {
+  if (redis && redisHazir) {
     try {
       const key = `limit:${anahtar}`;
       const mevcutSayi = await redis.incr(key);
@@ -78,8 +103,7 @@ export async function limitArtir(anahtar) {
       }
       return limitiHesapla(limit, mevcutSayi);
     } catch (err) {
-      console.warn('Redis limitArtir hatasi:', err.message);
-      throw new LimitServisiHatasi();
+      console.warn('Redis limitArtir hatasi, bellege dusuluyor:', err.message);
     }
   }
 
