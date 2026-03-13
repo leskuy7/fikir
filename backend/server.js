@@ -531,7 +531,8 @@ app.post('/api/mesaj', async (req, res) => {
           if (tekMod && aramOturumId) sayilanOturumlar.set(aramOturumId, Date.now());
         }
         return apiBasari(res, { yanit: JSON.stringify(kartlar) });
-      } catch {
+      } catch (err) {
+        console.error('AI_PARSE_HATASI Detaylari: rawResponse =', yanitMetni, ' | Hata =', err);
         return apiHata(res, 502, 'AI_PARSE_HATASI', 'AI ciktisi parse edilemedi', {
           retry: true,
         });
