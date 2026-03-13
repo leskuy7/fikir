@@ -9,6 +9,7 @@ import {
   LimitServisiHatasi,
 } from './middleware/rateLimiter.js';
 
+let firebaseAdminHazir = false;
 if (process.env.FIREBASE_SERVICE_ACCOUNT) {
   try {
     admin.initializeApp({
@@ -16,9 +17,13 @@ if (process.env.FIREBASE_SERVICE_ACCOUNT) {
         JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)
       ),
     });
+    firebaseAdminHazir = true;
+    console.log('Firebase Admin başlatıldı.');
   } catch (err) {
     console.warn('Firebase Admin başlatılamadı:', err.message);
   }
+} else {
+  console.warn('FIREBASE_SERVICE_ACCOUNT env var eksik — auth dogrulanamayacak.');
 }
 
 async function tokenDogrula(idToken) {
@@ -331,13 +336,14 @@ app.post('/api/mesaj', async (req, res) => {
 
   let dogrulanmisUid = null;
   if (idToken) {
+    if (!firebaseAdminHazir) {
+      return apiHata(res, 503, 'LIMIT_SERVISI_KULLANILAMIYOR', 'Auth servisi yapilandirilmamis, lutfen daha sonra tekrar dene');
+    }
     dogrulanmisUid = await tokenDogrula(idToken);
     if (!dogrulanmisUid) {
       return apiHata(res, 401, 'GIRIS_GEREKLI', 'Gecersiz oturum tokeni');
     }
   }
-
-  if (kullaniciId && !dogrulanmisUid) {
     return apiHata(res, 401, 'GIRIS_GEREKLI', 'Bu istek icin giris yapmalisin');
   }
 
@@ -499,6 +505,7 @@ app.get('/health', (req, res) => {
     model: GEMINI_MODEL,
     maxGecmisMesaj: MAX_GECMIS_MESAJ,
     redis: !!process.env.REDIS_URL,
+    firebaseAdmin: firebaseAdminHazir,
   });
 });
 
