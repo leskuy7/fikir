@@ -39,6 +39,7 @@ async function tokenDogrula(idToken) {
 const app = express();
 const PORT = process.env.PORT || 3001;
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+const GEMINI_FALLBACK_MODEL = 'gemini-2.5-flash-lite';
 const MAX_GECMIS_MESAJ = 6;
 const MAX_TOKENS_BY_MOD = {
   bilgi: 900,
@@ -217,9 +218,9 @@ async function kartlariTekTekUret(mod, messages, beklenenAdet) {
   return kartDizisiniDogrula(kartlar, beklenenAdet);
 }
 
-async function geminiIstekAt({ systemPrompt, messages, maxTokens, responseSchema }) {
+async function geminiIstekAt({ systemPrompt, messages, maxTokens, responseSchema, model = GEMINI_MODEL }) {
   return fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${process.env.GEMINI_API_KEY}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GEMINI_API_KEY}`,
     {
       method: 'POST',
       headers: {
@@ -412,7 +413,8 @@ app.post('/api/mesaj', async (req, res) => {
 
   try {
     const responseSchema = geminiJsonSchema(mod);
-    const geminiResponse = await geminiIstekAt({
+    let kullanilanModel = GEMINI_MODEL;
+    let geminiResponse = await geminiIstekAt({
       systemPrompt,
       messages,
       maxTokens,
@@ -421,9 +423,64 @@ app.post('/api/mesaj', async (req, res) => {
 
     if (!geminiResponse.ok) {
       const hata = await geminiResponse.json().catch(() => ({}));
-      console.error('Gemini hatası:', hata);
+      const fallbackUygun =
+        (geminiResponse.status === 400 || geminiResponse.status === 404)
+        && GEMINI_MODEL !== GEMINI_FALLBACK_MODEL;
+
+      if (fallbackUygun) {
+        console.warn('Gemini model fallback deneniyor:', {
+          oncekiModel: GEMINI_MODEL,
+          fallbackModel: GEMINI_FALLBACK_MODEL,
+          status: geminiResponse.status,
+          hata,
+        });
+
+        const fallbackResponse = await geminiIstekAt({
+          systemPrompt,
+          messages,
+          maxTokens,
+          responseSchema,
+          model: GEMINI_FALLBACK_MODEL,
+        });
+
+        if (fallbackResponse.ok) {
+          geminiResponse = fallbackResponse;
+          kullanilanModel = GEMINI_FALLBACK_MODEL;
+        } else {
+          const fallbackHata = await fallbackResponse.json().catch(() => ({}));
+          console.error('Gemini hatası (fallback da başarısız):', {
+            birincilModel: GEMINI_MODEL,
+            fallbackModel: GEMINI_FALLBACK_MODEL,
+            birincilStatus: geminiResponse.status,
+            fallbackStatus: fallbackResponse.status,
+            birincilHata: hata,
+            fallbackHata,
+          });
+          return apiHata(res, 502, 'AI_SERVISI_HATASI', 'AI servisi su an yanit vermiyor', {
+            retry: true,
+            model: GEMINI_MODEL,
+            upstreamStatus: fallbackResponse.status,
+          });
+        }
+      } else {
+        console.error('Gemini hatası:', {
+          model: GEMINI_MODEL,
+          status: geminiResponse.status,
+          hata,
+        });
+        return apiHata(res, 502, 'AI_SERVISI_HATASI', 'AI servisi su an yanit vermiyor', {
+          retry: true,
+          model: GEMINI_MODEL,
+          upstreamStatus: geminiResponse.status,
+        });
+      }
+    }
+
+    if (!geminiResponse.ok) {
       return apiHata(res, 502, 'AI_SERVISI_HATASI', 'AI servisi su an yanit vermiyor', {
         retry: true,
+        model: kullanilanModel,
+        upstreamStatus: geminiResponse.status,
       });
     }
 
