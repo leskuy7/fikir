@@ -38,7 +38,7 @@ async function tokenDogrula(idToken) {
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite';
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 const MAX_GECMIS_MESAJ = 6;
 const MAX_TOKENS_BY_MOD = {
   bilgi: 900,
