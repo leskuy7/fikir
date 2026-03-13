@@ -344,6 +344,8 @@ app.post('/api/mesaj', async (req, res) => {
       return apiHata(res, 401, 'GIRIS_GEREKLI', 'Gecersiz oturum tokeni');
     }
   }
+
+  if (kullaniciId && !dogrulanmisUid) {
     return apiHata(res, 401, 'GIRIS_GEREKLI', 'Bu istek icin giris yapmalisin');
   }
 
