@@ -16,6 +16,12 @@ function hataMesajiniGetir(kod, fallback, detay = null) {
     if (upstreamStatus === 404) return `Model bulunamadi (${model || 'bilinmiyor'}).`;
     return 'Servis gecici olarak yanit veremiyor. Birazdan tekrar dene.';
   }
+  if (kod === 'AI_FORMAT_HATASI') {
+    return 'AI yaniti beklenen kart formatinda degil. Tekrar dene.';
+  }
+  if (kod === 'AI_PARSE_HATASI') {
+    return 'AI yaniti islenemedi. Birazdan tekrar dene.';
+  }
   if (kod === 'LIMIT_SERVISI_KULLANILAMIYOR') {
     return 'Limit servisi gecici olarak kullanilamiyor. Lutfen daha sonra dene.';
   }

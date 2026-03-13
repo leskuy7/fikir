@@ -87,6 +87,11 @@ export async function mesajGonder({ mesajlar, mod, kullaniciId = null, aramOturu
   const body = await cevapJsonOku(response);
   if (!response.ok) {
     const kod = hataKoduMaple(response, body);
+    console.error('API hata detayi', {
+      status: response.status,
+      kod,
+      body,
+    });
     sessionExpiredBildir(kod);
     throw hataUret(kod, response.status, { limit, body });
   }
