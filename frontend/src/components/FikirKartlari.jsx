@@ -84,7 +84,7 @@ export default function FikirKartlari({ kullaniciId, limitBag = {}, gecmisIstek 
           <div className="kart-grid">
             {kartlar.map((kart, i) => (
               <button
-                key={i}
+                key={`${kart.baslik}-${i}`}
                 type="button"
                 className="card kart-grid__kart"
                 style={{ animationDelay: `${i * 0.07}s` }}

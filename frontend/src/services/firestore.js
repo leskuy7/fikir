@@ -40,11 +40,10 @@ export async function konusmalariGetir(kullaniciId) {
   const q = query(
     collection(db, 'konusmalar'),
     where('kullaniciId', '==', kullaniciId),
-    limit(50)
+    limit(20)
   );
   const snapshot = await getDocs(q);
   return snapshot.docs
     .map((doc) => ({ id: doc.id, ...doc.data() }))
-    .sort((a, b) => (b.tarih?.seconds || 0) - (a.tarih?.seconds || 0))
-    .slice(0, 20);
+    .sort((a, b) => (b.tarih?.seconds || 0) - (a.tarih?.seconds || 0));
 }
