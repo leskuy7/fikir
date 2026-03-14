@@ -260,6 +260,7 @@ async function geminiIstekAt({ systemPrompt, messages, maxTokens, responseSchema
             responseMimeType: 'application/json',
             responseSchema,
           }),
+          thinkingConfig: { thinkingBudget: 0 },
         },
       }),
     }
@@ -291,6 +292,7 @@ function geminiIcerikleriniHazirla(messages) {
 
 function geminiYanitMetni(veri) {
   return veri.candidates?.[0]?.content?.parts
+    ?.filter((part) => !part.thought)
     ?.map((part) => part.text || '')
     .join('')
     .trim() || '';
