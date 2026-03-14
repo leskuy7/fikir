@@ -241,6 +241,17 @@ async function kartlariTekTekUret(mod, messages, beklenenAdet) {
 }
 
 async function geminiIstekAt({ systemPrompt, messages, maxTokens, responseSchema, model = GEMINI_MODEL }) {
+  if (!process.env.GEMINI_API_KEY) {
+    // API Key yoksa test amaciyla her seferinde parse edilemeyen veya bozuk formatli mock don
+    return {
+      ok: true,
+      json: async () => ({
+        candidates: [{
+          content: { parts: [{ text: "```json\n[{ \"eksik_alan\": \"baslik yok\", \"farkli\": \"kanca yerine bu var\" }]\n```" }] }
+        }]
+      })
+    };
+  }
   return fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
     {
@@ -450,7 +461,7 @@ app.post('/api/mesaj', async (req, res) => {
   }
 
   if (!process.env.GEMINI_API_KEY) {
-    return apiHata(res, 500, 'SUNUCU_HATASI', 'GEMINI_API_KEY tanimli degil');
+    console.warn("MOCK_MODU: GEMINI_API_KEY tanimli degil, mock yanit dondurulecek.");
   }
 
   if (mod === 'konu_kilidi') {
