@@ -104,6 +104,19 @@ export default function App() {
       <footer className="app__footer">
         <span className="app__footer-marka">Fikir Kutusu</span>
         <span className="app__footer-sep">·</span>
+        {import.meta.env.VITE_APK_DOWNLOAD_URL && (
+          <>
+            <a
+              href={import.meta.env.VITE_APK_DOWNLOAD_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="app__footer-link"
+            >
+              Android APK İndir
+            </a>
+            <span className="app__footer-sep">·</span>
+          </>
+        )}
         <button
           type="button"
           className="app__footer-link"
