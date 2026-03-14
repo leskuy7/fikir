@@ -1,4 +1,4 @@
-import { useSyncExternalStore, useCallback, useState } from 'react';
+import { useSyncExternalStore, useCallback, useState, useMemo } from 'react';
 
 const MISAFIR_LIMIT = 5;
 const KAYITLI_LIMIT = 20;
@@ -36,11 +36,11 @@ function yaz(key, data) {
 }
 
 function getSnapshot(key) {
-  return oku(key);
+  return localStorage.getItem(key);
 }
 
 function getServerSnapshot(key) {
-  return { gun: bugun(), sayi: 0 };
+  return null;
 }
 
 function subscribe(key, callback) {
@@ -63,11 +63,22 @@ export function useLimit(kullaniciId = null) {
   const key = limitKey(kullaniciId);
   const limit = kullaniciId ? KAYITLI_LIMIT : MISAFIR_LIMIT;
 
-  const durum = useSyncExternalStore(
+  const snapshotString = useSyncExternalStore(
     (cb) => subscribe(key, cb),
     () => getSnapshot(key),
     () => getServerSnapshot(key)
   );
+
+  const durum = useMemo(() => {
+    if (!snapshotString) return { gun: bugun(), sayi: 0 };
+    try {
+      const data = JSON.parse(snapshotString);
+      if (data.gun !== bugun()) return { gun: bugun(), sayi: 0 };
+      return data;
+    } catch {
+      return { gun: bugun(), sayi: 0 };
+    }
+  }, [snapshotString]);
 
   const [sunucuDurumu, setSunucuDurumu] = useState({ key: null, limit: null });
   const sunucuLimit = sunucuDurumu.key === key ? sunucuDurumu.limit : null;
