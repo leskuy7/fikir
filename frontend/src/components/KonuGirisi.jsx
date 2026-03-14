@@ -39,17 +39,16 @@ export default function KonuGirisi({
       </form>
       {yukleniyor && <YukleniyorSpinner metin="Yanıt yazılıyor..." />}
       {cevap && !yukleniyor && (
-        <div
-          className="konu-girisi__cevap"
-          dangerouslySetInnerHTML={{
-            __html: DOMPurify.sanitize(
-              cevap
-                .split('\n\n')
-                .map((p) => `<p>${p.replace(/\n/g, '<br />')}</p>`)
-                .join('')
-            ),
-          }}
-        />
+        <div className="konu-girisi__cevap">
+          {cevap.split('\n\n').map((paragraf, i) => (
+            <p
+              key={i}
+              dangerouslySetInnerHTML={{
+                __html: DOMPurify.sanitize(paragraf.replace(/\n/g, '<br />')),
+              }}
+            />
+          ))}
+        </div>
       )}
     </section>
   );

@@ -38,6 +38,7 @@ async function tokenDogrula(idToken) {
 }
 
 const app = express();
+app.set('trust proxy', 1);
 const PORT = process.env.PORT || 3001;
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 const GEMINI_FALLBACK_MODEL = process.env.GEMINI_FALLBACK_MODEL || 'gemini-2.5-flash-lite';
@@ -61,12 +62,10 @@ const KART_SAYISI_BY_MOD = {
   fikir_tek: 1,
   ilgili: 4,
 };
-const IZNLI_ORIGINLER = new Set([
-  'https://fikir-nine.vercel.app',
-  ...(process.env.CORS_ORIGINS
-    ? process.env.CORS_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean)
-    : []),
-]);
+const IZNLI_ORIGINLER = new Set(
+  (process.env.CORS_ORIGINS || 'https://fikir-nine.vercel.app')
+    .split(',').map((o) => o.trim()).filter(Boolean)
+);
 
 function geminiJsonSchema(mod) {
   if (!JSON_KART_MODLARI.has(mod)) return null;
@@ -243,11 +242,12 @@ async function kartlariTekTekUret(mod, messages, beklenenAdet) {
 
 async function geminiIstekAt({ systemPrompt, messages, maxTokens, responseSchema, model = GEMINI_MODEL }) {
   return fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GEMINI_API_KEY}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
     {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'x-goog-api-key': process.env.GEMINI_API_KEY,
       },
       body: JSON.stringify({
         systemInstruction: {
@@ -260,6 +260,7 @@ async function geminiIstekAt({ systemPrompt, messages, maxTokens, responseSchema
             responseMimeType: 'application/json',
             responseSchema,
           }),
+          thinkingConfig: { thinkingBudget: 0 },
         },
       }),
     }
@@ -291,6 +292,7 @@ function geminiIcerikleriniHazirla(messages) {
 
 function geminiYanitMetni(veri) {
   return veri.candidates?.[0]?.content?.parts
+    ?.filter((part) => !part.thought)
     ?.map((part) => part.text || '')
     .join('')
     .trim() || '';
@@ -364,9 +366,10 @@ app.post('/api/mesaj', async (req, res) => {
   const { mesajlar, mod, kullaniciId } = req.body;
   const aramOturumId = req.headers['x-arama-oturumu'] || null;
   const authHeader = req.headers.authorization || '';
-  const idToken = authHeader.startsWith('Bearer ')
+  const rawToken = authHeader.startsWith('Bearer ')
     ? authHeader.slice(7).trim()
     : null;
+  const idToken = rawToken || null;
 
   if (!mesajlar || !Array.isArray(mesajlar) || mesajlar.length === 0) {
     return apiHata(res, 400, 'ISTEK_HATASI', 'Gecersiz istek: mesajlar dizisi gerekli');
@@ -588,7 +591,7 @@ app.post('/api/mesaj', async (req, res) => {
         if (weReserved && tekMod && aramOturumId) sayilanOturumlar.set(aramOturumId, Date.now());
         return apiBasari(res, { yanit: JSON.stringify(kartlar) });
       } catch (err) {
-        console.error('AI_PARSE_HATASI Detaylari: rawResponse =', yanitMetni, ' | Hata =', err);
+        console.error('AI_PARSE_HATASI Detaylari: rawResponse (ilk 200) =', String(yanitMetni).slice(0, 200), ' | Hata =', err.message);
         if (weReserved) await limitIadeEt(limitAnahtari);
         return apiHata(res, 502, 'AI_PARSE_HATASI', 'AI ciktisi parse edilemedi', {
           retry: true,
@@ -634,7 +637,7 @@ app.use((_req, res) => {
 app.use((err, req, res, _next) => {
   console.error('Beklenmeyen Sunucu Hatası:', err);
   if (res.headersSent) return;
-  res.status(500).json({ ok: false, kod: 'BEKLENMEYEN_HATA', hata: err.message });
+  res.status(500).json({ ok: false, kod: 'BEKLENMEYEN_HATA', hata: 'Beklenmeyen bir sunucu hatasi olustu' });
 });
 
 app.listen(PORT, () => {

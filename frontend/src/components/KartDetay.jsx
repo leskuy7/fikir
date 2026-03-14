@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import DOMPurify from 'dompurify';
 import YukleniyorSpinner from './YukleniyorSpinner.jsx';
 import GeriBildirim from './GeriBildirim.jsx';
@@ -45,17 +45,16 @@ export default function KartDetay({
           {detayYukleniyor ? (
             <YukleniyorSpinner metin="Detay yükleniyor..." />
           ) : detayIcerik ? (
-            <div
-              className="kart-detay__icerik"
-              dangerouslySetInnerHTML={{
-                __html: DOMPurify.sanitize(
-                  detayIcerik
-                    .split('\n\n')
-                    .map((p) => `<p>${p.replace(/\n/g, '<br />')}</p>`)
-                    .join('')
-                ),
-              }}
-            />
+            <div className="kart-detay__icerik">
+              {detayIcerik.split('\n\n').map((paragraf, i) => (
+                <p
+                  key={i}
+                  dangerouslySetInnerHTML={{
+                    __html: DOMPurify.sanitize(paragraf.replace(/\n/g, '<br />')),
+                  }}
+                />
+              ))}
+            </div>
           ) : null}
           {detayIcerik && !detayYukleniyor && (
             <div className="kart-detay__aksiyonlar">

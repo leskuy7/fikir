@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(wc -l /c/Users/yksel/Desktop/yzlm/fikir/.claude/worktrees/focused-mendeleev/frontend/src/components/*.jsx)",
+      "Bash(grep -n '\\\\$\\\\{' /c/Users/yksel/Desktop/yzlm/fikir/.claude/worktrees/focused-mendeleev/backend/server.js)",
+      "Bash(find /c/Users/yksel/Desktop/yzlm/fikir/.claude/worktrees/focused-mendeleev -not -path */node_modules* -type d)",
+      "Bash(winget install:*)",
+      "Bash(export PATH=\"$PATH:/c/Program Files/GitHub CLI\")",
+      "Bash(gh auth:*)"
+    ]
+  }
+}
