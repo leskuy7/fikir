@@ -6,7 +6,11 @@
       "Bash(find /c/Users/yksel/Desktop/yzlm/fikir/.claude/worktrees/focused-mendeleev -not -path */node_modules* -type d)",
       "Bash(winget install:*)",
       "Bash(export PATH=\"$PATH:/c/Program Files/GitHub CLI\")",
-      "Bash(gh auth:*)"
+      "Bash(gh auth:*)",
+      "Bash(gh pr:*)",
+      "WebSearch",
+      "Bash(curl -s -w \"\\\\nHTTP_STATUS: %{http_code}\" -X POST \"https://fikir-production.up.railway.app/api/mesaj\" -H \"Content-Type: application/json\" -d '{\"\"mesajlar\"\":[{\"\"role\"\":\"\"user\"\",\"\"content\"\":\"\"yazılım\"\"}],\"\"mod\"\":\"\"fikir\"\"}')",
+      "Bash(find /c/Users/yksel/Desktop/yzlm/fikir/frontend/src -type f \\\\\\(-name *.tsx -o -name *.ts -o -name *.jsx -o -name *.js -o -name *.css \\\\\\))"
     ]
   }
 }
