@@ -63,6 +63,9 @@ const KART_SAYISI_BY_MOD = {
 };
 const IZNLI_ORIGINLER = new Set([
   'https://fikir-nine.vercel.app',
+  ...(process.env.CORS_ORIGINS
+    ? process.env.CORS_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean)
+    : []),
 ]);
 
 function geminiJsonSchema(mod) {
@@ -157,7 +160,10 @@ function kartDizisiniDogrula(kartlar, beklenenAdet) {
     .filter((kart) => kart.baslik && kart.kanca)
     .slice(0, beklenenAdet);
 
-  if (temizlenmis.length !== beklenenAdet) return null;
+    if (temizlenmis.length !== beklenenAdet) {
+      console.error('Gemini yaniti (format hatasi):', kartlar);
+      return null;
+    }
   return temizlenmis;
 }
 
