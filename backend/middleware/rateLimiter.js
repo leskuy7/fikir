@@ -46,6 +46,13 @@ if (process.env.REDIS_URL) {
 
 const sayac = new Map();
 
+setInterval(() => {
+  const simdi = Date.now();
+  for (const [anahtar, kayit] of sayac.entries()) {
+    if (simdi > kayit.sifirlanmaTarihi) sayac.delete(anahtar);
+  }
+}, 60 * 60 * 1000);
+
 function getLimit(anahtar) {
   return anahtar?.startsWith('uid:') ? KAYITLI_LIMIT : MISAFIR_LIMIT;
 }
@@ -97,10 +104,9 @@ export async function limitArtir(anahtar) {
   if (redis && redisHazir) {
     try {
       const key = `limit:${anahtar}`;
-      const mevcutSayi = await redis.incr(key);
-      if (mevcutSayi === 1) {
-        await redis.expire(key, geceYarisiSaniye());
-      }
+      const ttl = geceYarisiSaniye();
+      const script = "local c = redis.call('INCR', KEYS[1]); if c == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end; return c";
+      const mevcutSayi = await redis.eval(script, 1, key, ttl);
       return limitiHesapla(limit, mevcutSayi);
     } catch (err) {
       console.warn('Redis limitArtir hatasi, bellege dusuluyor:', err.message);
@@ -122,4 +128,27 @@ export async function limitArtir(anahtar) {
     mevcutKayit.sayi++;
     return limitiHesapla(limit, mevcutKayit.sayi);
   }
+}
+
+export async function limitIadeEt(anahtar) {
+  const limit = getLimit(anahtar);
+
+  if (redis && redisHazir) {
+    try {
+      const key = `limit:${anahtar}`;
+      const sayi = await redis.get(key);
+      const mevcut = sayi !== null ? parseInt(sayi, 10) : 0;
+      if (Number.isNaN(mevcut) || mevcut <= 0) return limitiHesapla(limit, 0);
+      await redis.decr(key);
+      return limitiHesapla(limit, mevcut - 1);
+    } catch (err) {
+      console.warn('Redis limitIadeEt hatasi, bellege dusuluyor:', err.message);
+    }
+  }
+
+  const simdi = Date.now();
+  const kayit = sayac.get(anahtar);
+  if (!kayit || simdi > kayit.sifirlanmaTarihi) return limitiHesapla(limit, 0);
+  kayit.sayi = Math.max(0, kayit.sayi - 1);
+  return limitiHesapla(limit, kayit.sayi);
 }

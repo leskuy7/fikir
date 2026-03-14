@@ -11,6 +11,10 @@ function hataMesajiniGetir(kod, fallback) {
   if (kod === 'LIMIT_SERVISI_KULLANILAMIYOR') {
     return 'Limit servisi gecici olarak kullanilamiyor.';
   }
+  if (kod === 'BACKEND_URL_YOK') return 'Backend adresi tanimli degil. Ayarlari kontrol et.';
+  if (kod === 'AI_FORMAT_HATASI') return 'Yanit formati hatali. Tekrar dene.';
+  if (kod === 'AI_PARSE_HATASI') return 'Yanit islenemedi. Birazdan tekrar dene.';
+  if (kod === 'BULUNAMADI' || kod === 'BEKLENMEYEN_HATA') return 'Bir hata olustu. Tekrar dene.';
   return fallback;
 }
 

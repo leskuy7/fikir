@@ -25,6 +25,8 @@ function hataMesajiniGetir(kod, fallback, detay = null) {
   if (kod === 'LIMIT_SERVISI_KULLANILAMIYOR') {
     return 'Limit servisi gecici olarak kullanilamiyor. Lutfen daha sonra dene.';
   }
+  if (kod === 'BULUNAMADI') return 'Istenen kaynak bulunamadi.';
+  if (kod === 'BEKLENMEYEN_HATA') return 'Beklenmeyen bir hata olustu. Sayfayi yenile.';
   return fallback;
 }
 

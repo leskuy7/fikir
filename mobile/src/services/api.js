@@ -1,6 +1,10 @@
+import { Platform } from 'react-native';
+import { auth } from './firebase.js';
+
+const DEV_HOST = Platform.OS === 'android' ? '10.0.2.2' : '127.0.0.1';
 const BACKEND_URL =
   process.env.EXPO_PUBLIC_BACKEND_URL?.trim()
-  || (__DEV__ ? 'http://10.0.2.2:3001' : '');
+  || (__DEV__ ? `http://${DEV_HOST}:3001` : '');
 
 function hataUret(kod, status = 0, extra = {}) {
   const err = new Error(kod);
@@ -41,19 +45,39 @@ function hataKoduMaple(response, body) {
   return 'SUNUCU_HATASI';
 }
 
+async function getIdToken(forceRefresh = false) {
+  try {
+    const user = auth?.currentUser ?? null;
+    if (!user || typeof user.getIdToken !== 'function') return null;
+    return await user.getIdToken(forceRefresh);
+  } catch {
+    return null;
+  }
+}
+
 export async function mesajGonder({ mesajlar, mod, kullaniciId = null, aramOturumId = null }) {
   if (!BACKEND_URL) {
     throw hataUret('BACKEND_URL_YOK');
   }
 
-  const headers = { 'Content-Type': 'application/json' };
-  if (aramOturumId) headers['x-arama-oturumu'] = aramOturumId;
+  const istegiGonder = async (forceRefresh = false) => {
+    const idToken = await getIdToken(forceRefresh);
+    const headers = { 'Content-Type': 'application/json' };
+    if (idToken) headers.Authorization = `Bearer ${idToken}`;
+    if (aramOturumId) headers['x-arama-oturumu'] = aramOturumId;
 
-  const response = await fetch(`${BACKEND_URL}/api/mesaj`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ mesajlar, mod, kullaniciId }),
-  });
+    const bodyKullaniciId = idToken ? kullaniciId : null;
+    return fetch(`${BACKEND_URL}/api/mesaj`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ mesajlar, mod, kullaniciId: bodyKullaniciId }),
+    });
+  };
+
+  let response = await istegiGonder(false);
+  if (response.status === 401) {
+    response = await istegiGonder(true);
+  }
 
   const limit = parseLimit(response.headers);
   const body = await cevapJsonOku(response);

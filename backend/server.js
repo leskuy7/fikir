@@ -6,6 +6,7 @@ import { getSystemPrompt } from './prompts/sistem.js';
 import {
   limitArtir,
   limitDurumGetir,
+  limitIadeEt,
   LimitServisiHatasi,
 } from './middleware/rateLimiter.js';
 
@@ -62,7 +63,6 @@ const KART_SAYISI_BY_MOD = {
 };
 const IZNLI_ORIGINLER = new Set([
   'https://fikir-nine.vercel.app',
-  'http://localhost:5173',
 ]);
 
 function geminiJsonSchema(mod) {
@@ -103,7 +103,24 @@ function kartJsonuNormalizeEt(metin) {
     .replace(/\s*```\s*$/i, '')
     .trim();
 
-  const parsed = JSON.parse(temiz);
+  let parsed;
+  try {
+    parsed = JSON.parse(temiz);
+  } catch {
+    const codeBlock = temiz.match(/```(?:json)?\s*([\s\S]*?)```/);
+    const jsonBlock = (codeBlock?.[1] ?? temiz).trim();
+    const objMatch = jsonBlock.match(/\{[\s\S]*\}/);
+    if (objMatch) {
+      try {
+        parsed = JSON.parse(objMatch[0]);
+      } catch {
+        return null;
+      }
+    } else {
+      return null;
+    }
+  }
+
   if (parsed && typeof parsed === 'object' && parsed.baslik && parsed.kanca) {
     return [parsed];
   }
@@ -309,7 +326,24 @@ app.use(
     },
   })
 );
-app.use(express.json());
+const MAX_BODY_KB = 100;
+const MAX_MESAJ_SAYISI = 20;
+const MAX_MESAJ_ICERIK_KARAKTER = 15000;
+
+app.use(express.json({ limit: `${MAX_BODY_KB}kb` }));
+
+app.use((req, res, next) => {
+  req._startAt = Date.now();
+  res.on('finish', () => {
+    const ms = Date.now() - (req._startAt || 0);
+    const isError = res.statusCode >= 400;
+    const isSlow = ms > 5000;
+    if (isError || isSlow) {
+      console.warn(`[${res.statusCode}] ${req.method} ${req.path} ${ms}ms`);
+    }
+  });
+  next();
+});
 
 // Tek kart modlarında aynı arama oturumu için limit sadece 1 kez artırılır.
 const sayilanOturumlar = new Map(); // oturumId → true
@@ -330,6 +364,13 @@ app.post('/api/mesaj', async (req, res) => {
 
   if (!mesajlar || !Array.isArray(mesajlar) || mesajlar.length === 0) {
     return apiHata(res, 400, 'ISTEK_HATASI', 'Gecersiz istek: mesajlar dizisi gerekli');
+  }
+  if (mesajlar.length > MAX_MESAJ_SAYISI) {
+    return apiHata(res, 400, 'ISTEK_HATASI', `En fazla ${MAX_MESAJ_SAYISI} mesaj gonderebilirsin`);
+  }
+  const asiriUzun = mesajlar.find((m) => String(m?.content || '').length > MAX_MESAJ_ICERIK_KARAKTER);
+  if (asiriUzun) {
+    return apiHata(res, 400, 'ISTEK_HATASI', `Bir mesaj en fazla ${MAX_MESAJ_ICERIK_KARAKTER} karakter olabilir`);
   }
   if (!GECERLI_MODLAR.includes(mod)) {
     return apiHata(res, 400, 'ISTEK_HATASI', 'Gecersiz mod');
@@ -380,6 +421,15 @@ app.post('/api/mesaj', async (req, res) => {
       mesaj: 'Uye olarak daha fazla kullanim hakki kazanabilirsin',
       retry: false,
     });
+  }
+
+  const tekMod = mod === 'bilgi_tek' || mod === 'fikir_tek';
+  const zatenSayildi = tekMod && aramOturumId && sayilanOturumlar.has(aramOturumId);
+  let weReserved = false;
+  let rezerveLimitDurum = null;
+  if (!zatenSayildi) {
+    rezerveLimitDurum = await limitArtir(limitAnahtari);
+    weReserved = true;
   }
 
   let systemPrompt = getSystemPrompt(anaMod(mod));
@@ -456,6 +506,7 @@ app.post('/api/mesaj', async (req, res) => {
             birincilHata: hata,
             fallbackHata,
           });
+          if (weReserved) await limitIadeEt(limitAnahtari);
           return apiHata(res, 502, 'AI_SERVISI_HATASI', 'AI servisi su an yanit vermiyor', {
             retry: true,
             model: GEMINI_MODEL,
@@ -468,6 +519,7 @@ app.post('/api/mesaj', async (req, res) => {
           status: geminiResponse.status,
           hata,
         });
+        if (weReserved) await limitIadeEt(limitAnahtari);
         return apiHata(res, 502, 'AI_SERVISI_HATASI', 'AI servisi su an yanit vermiyor', {
           retry: true,
           model: GEMINI_MODEL,
@@ -477,6 +529,7 @@ app.post('/api/mesaj', async (req, res) => {
     }
 
     if (!geminiResponse.ok) {
+      if (weReserved) await limitIadeEt(limitAnahtari);
       return apiHata(res, 502, 'AI_SERVISI_HATASI', 'AI servisi su an yanit vermiyor', {
         retry: true,
         model: kullanilanModel,
@@ -518,32 +571,31 @@ app.post('/api/mesaj', async (req, res) => {
         }
 
         if (!kartlar) {
+          if (weReserved) await limitIadeEt(limitAnahtari);
           return apiHata(res, 502, 'AI_FORMAT_HATASI', 'AI ciktisi gecersiz formatta', {
             detay: 'Kart JSON üretimi tamamlanamadi',
           });
         }
 
-        const tekMod = mod === 'bilgi_tek' || mod === 'fikir_tek';
-        const zatenSayildi = tekMod && aramOturumId && sayilanOturumlar.has(aramOturumId);
-        if (!zatenSayildi) {
-          const yeniLimitDurum = await limitArtir(limitAnahtari);
-          limitHeaderYaz(res, yeniLimitDurum);
-          if (tekMod && aramOturumId) sayilanOturumlar.set(aramOturumId, Date.now());
-        }
+        if (rezerveLimitDurum) limitHeaderYaz(res, rezerveLimitDurum);
+        else limitHeaderYaz(res, await limitDurumGetir(limitAnahtari));
+        if (weReserved && tekMod && aramOturumId) sayilanOturumlar.set(aramOturumId, Date.now());
         return apiBasari(res, { yanit: JSON.stringify(kartlar) });
       } catch (err) {
         console.error('AI_PARSE_HATASI Detaylari: rawResponse =', yanitMetni, ' | Hata =', err);
+        if (weReserved) await limitIadeEt(limitAnahtari);
         return apiHata(res, 502, 'AI_PARSE_HATASI', 'AI ciktisi parse edilemedi', {
           retry: true,
         });
       }
     }
 
-    const yeniLimitDurum = await limitArtir(limitAnahtari);
-    limitHeaderYaz(res, yeniLimitDurum);
+    if (rezerveLimitDurum) limitHeaderYaz(res, rezerveLimitDurum);
+    else limitHeaderYaz(res, await limitDurumGetir(limitAnahtari));
     return apiBasari(res, { yanit: yanitMetni });
   } catch (err) {
     console.error('Sunucu hatası:', err);
+    if (weReserved) await limitIadeEt(limitAnahtari).catch(() => {});
     if (err instanceof LimitServisiHatasi) {
       return apiHata(
         res,
@@ -567,6 +619,16 @@ app.get('/health', (req, res) => {
     redis: !!process.env.REDIS_URL,
     firebaseAdmin: firebaseAdminHazir,
   });
+});
+
+app.use((_req, res) => {
+  res.status(404).json({ ok: false, kod: 'BULUNAMADI', hata: 'Istek edilen kaynak bulunamadi' });
+});
+
+app.use((err, req, res, _next) => {
+  console.error('Beklenmeyen Sunucu Hatası:', err);
+  if (res.headersSent) return;
+  res.status(500).json({ ok: false, kod: 'BEKLENMEYEN_HATA', hata: err.message });
 });
 
 app.listen(PORT, () => {
