@@ -31,8 +31,12 @@ export default function FikirKartlari({ kullaniciId, limitBag = {}, gecmisIstek 
     onLimitGuncelle: sunucudanGuncelle,
   });
 
+  const sonGonderimRef = useRef(0);
   const ara = (e) => {
     e.preventDefault();
+    const simdi = Date.now();
+    if (simdi - sonGonderimRef.current < 1000) return;
+    sonGonderimRef.current = simdi;
     kartlariGetir(girdiRef.current?.value || '');
   };
 

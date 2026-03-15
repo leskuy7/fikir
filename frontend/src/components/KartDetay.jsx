@@ -24,7 +24,7 @@ export default function KartDetay({
   if (!acikKart) return null;
 
   return (
-    <div className="kart-detay-overlay" role="dialog" aria-modal="true" aria-label="Kart detayı">
+    <div className="kart-detay-overlay" role="dialog" aria-modal="true" aria-labelledby="kart-detay-baslik">
       <div className="kart-detay-overlay__backdrop" onClick={onKapat} aria-hidden="true" />
       <div className="kart-detay" id={DETAY_ID}>
         <button
@@ -36,7 +36,7 @@ export default function KartDetay({
           ×
         </button>
         <header className="kart-detay__baslik-wrap">
-          <h2 className="kart-detay__baslik">{acikKart.baslik}</h2>
+          <h2 id="kart-detay-baslik" className="kart-detay__baslik">{acikKart.baslik}</h2>
           {acikKart.kanca && (
             <p className="kart-detay__kanca">{acikKart.kanca}</p>
           )}

@@ -1,7 +1,7 @@
 import Redis from 'ioredis';
 
-const MISAFIR_LIMIT = 5;
-const KAYITLI_LIMIT = 20;
+const MISAFIR_LIMIT = parseInt(process.env.MISAFIR_LIMIT, 10) || 5;
+const KAYITLI_LIMIT = parseInt(process.env.KAYITLI_LIMIT, 10) || 20;
 
 export class LimitServisiHatasi extends Error {
   constructor(message = 'Limit servisine su an ulasilamiyor') {
@@ -45,11 +45,15 @@ if (process.env.REDIS_URL) {
 }
 
 const sayac = new Map();
+const MAX_BELLEK_KAYIT = 100000;
 
 setInterval(() => {
   const simdi = Date.now();
   for (const [anahtar, kayit] of sayac.entries()) {
     if (simdi > kayit.sifirlanmaTarihi) sayac.delete(anahtar);
+  }
+  if (!redisHazir && sayac.size > 0) {
+    console.warn(`Redis devre disi — bellek limit sayaci aktif (${sayac.size} kayit)`);
   }
 }, 60 * 60 * 1000);
 
@@ -69,8 +73,9 @@ function limitiHesapla(limit, sayi) {
 
 function geceYarisiSaniye() {
   const simdi = new Date();
-  const geceyarisi = new Date();
-  geceyarisi.setHours(24, 0, 0, 0);
+  const geceyarisi = new Date(simdi);
+  geceyarisi.setDate(geceyarisi.getDate() + 1);
+  geceyarisi.setHours(0, 0, 0, 0);
   return Math.max(1, Math.floor((geceyarisi - simdi) / 1000));
 }
 
@@ -115,10 +120,15 @@ export async function limitArtir(anahtar) {
 
   const simdi = Date.now();
   const geceyarisi = new Date();
-  geceyarisi.setHours(24, 0, 0, 0);
+  geceyarisi.setDate(geceyarisi.getDate() + 1);
+  geceyarisi.setHours(0, 0, 0, 0);
   const mevcutKayit = sayac.get(anahtar);
 
   if (!mevcutKayit || simdi > mevcutKayit.sifirlanmaTarihi) {
+    if (sayac.size >= MAX_BELLEK_KAYIT) {
+      const ilkAnahtar = sayac.keys().next().value;
+      sayac.delete(ilkAnahtar);
+    }
     sayac.set(anahtar, {
       sayi: 1,
       sifirlanmaTarihi: geceyarisi.getTime(),

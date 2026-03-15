@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import 'dotenv/config';
 import admin from 'firebase-admin';
+import crypto from 'crypto';
 import { getSystemPrompt } from './prompts/sistem.js';
 import {
   limitArtir,
@@ -111,10 +112,11 @@ function kartJsonuNormalizeEt(metin) {
   } catch {
     const codeBlock = temiz.match(/```(?:json)?\s*([\s\S]*?)```/);
     const jsonBlock = (codeBlock?.[1] ?? temiz).trim();
-    const objMatch = jsonBlock.match(/\{[\s\S]*\}/);
-    if (objMatch) {
+    const ilkAc = jsonBlock.indexOf('{');
+    const sonKapa = jsonBlock.lastIndexOf('}');
+    if (ilkAc !== -1 && sonKapa > ilkAc) {
       try {
-        parsed = JSON.parse(objMatch[0]);
+        parsed = JSON.parse(jsonBlock.slice(ilkAc, sonKapa + 1));
       } catch {
         return null;
       }
@@ -200,82 +202,75 @@ function tekKartPromptu(mod, sira, toplam) {
 }
 
 async function kartlariTekTekUret(mod, messages, beklenenAdet) {
-  const kartlar = [];
-
-  for (let i = 0; i < beklenenAdet; i += 1) {
-    const tekKartResponse = await geminiIstekAt({
+  const istekler = Array.from({ length: beklenenAdet }, (_, i) =>
+    geminiIstekAt({
       systemPrompt: tekKartPromptu(mod, i + 1, beklenenAdet),
       messages,
       maxTokens: 240,
       responseSchema: tekKartJsonSchema(),
-    });
-
-    if (!tekKartResponse.ok) return null;
-
-    const tekKartVeri = await tekKartResponse.json();
-    const tekKartMetni = geminiYanitMetni(tekKartVeri);
-
-    let tekKart;
-    try {
-      const parsed = kartJsonuNormalizeEt(tekKartMetni);
+    }).then(async (resp) => {
+      if (!resp.ok) return null;
+      const veri = await resp.json();
+      const metin = geminiYanitMetni(veri);
+      let tekKart;
+      const parsed = kartJsonuNormalizeEt(metin);
       if (Array.isArray(parsed)) {
         tekKart = parsed[0];
       } else {
-        const temiz = String(tekKartMetni || '')
+        const temiz = String(metin || '')
           .replace(/^```json\s*/i, '')
           .replace(/^```\s*/i, '')
           .replace(/\s*```\s*$/i, '')
           .trim();
         tekKart = JSON.parse(temiz);
       }
-    } catch {
-      return null;
-    }
+      const dogrulanan = kartDizisiniDogrula([tekKart], 1);
+      return dogrulanan ? dogrulanan[0] : null;
+    }).catch(() => null)
+  );
 
-    const dogrulanan = kartDizisiniDogrula([tekKart], 1);
-    if (!dogrulanan) return null;
-    kartlar.push(dogrulanan[0]);
-  }
-
-  return kartDizisiniDogrula(kartlar, beklenenAdet);
+  const sonuclar = await Promise.all(istekler);
+  const kartlar = sonuclar.filter(Boolean);
+  return kartlar.length === beklenenAdet ? kartlar : null;
 }
+
+const FETCH_TIMEOUT_MS = 15000;
 
 async function geminiIstekAt({ systemPrompt, messages, maxTokens, responseSchema, model = GEMINI_MODEL }) {
   if (!process.env.GEMINI_API_KEY) {
-    // API Key yoksa test amaciyla her seferinde parse edilemeyen veya bozuk formatli mock don
-    return {
-      ok: true,
-      json: async () => ({
-        candidates: [{
-          content: { parts: [{ text: "```json\n[{ \"eksik_alan\": \"baslik yok\", \"farkli\": \"kanca yerine bu var\" }]\n```" }] }
-        }]
-      })
-    };
+    throw new Error('GEMINI_API_KEY tanımlanmamış — AI servisi kullanılamaz');
   }
-  return fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': process.env.GEMINI_API_KEY,
-      },
-      body: JSON.stringify({
-        systemInstruction: {
-          parts: [{ text: systemPrompt }],
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    return await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+      {
+        method: 'POST',
+        signal: controller.signal,
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': process.env.GEMINI_API_KEY,
         },
-        contents: geminiIcerikleriniHazirla(messages),
-        generationConfig: {
-          maxOutputTokens: maxTokens,
-          ...(responseSchema && {
-            responseMimeType: 'application/json',
-            responseSchema,
-          }),
-          thinkingConfig: { thinkingBudget: 0 },
-        },
-      }),
-    }
-  );
+        body: JSON.stringify({
+          systemInstruction: {
+            parts: [{ text: systemPrompt }],
+          },
+          contents: geminiIcerikleriniHazirla(messages),
+          generationConfig: {
+            maxOutputTokens: maxTokens,
+            ...(responseSchema && {
+              responseMimeType: 'application/json',
+              responseSchema,
+            }),
+            thinkingConfig: { thinkingBudget: 0 },
+          },
+        }),
+      }
+    );
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function konuKilidiParse(userContent) {
@@ -353,12 +348,14 @@ app.use(express.json({ limit: `${MAX_BODY_KB}kb` }));
 
 app.use((req, res, next) => {
   req._startAt = Date.now();
+  req._requestId = crypto.randomUUID();
+  res.setHeader('x-request-id', req._requestId);
   res.on('finish', () => {
     const ms = Date.now() - (req._startAt || 0);
     const isError = res.statusCode >= 400;
     const isSlow = ms > 5000;
     if (isError || isSlow) {
-      console.warn(`[${res.statusCode}] ${req.method} ${req.path} ${ms}ms`);
+      console.warn(`[${res.statusCode}] ${req.method} ${req.path} ${ms}ms rid=${req._requestId}`);
     }
   });
   next();
@@ -375,7 +372,8 @@ setInterval(() => {
 
 app.post('/api/mesaj', async (req, res) => {
   const { mesajlar, mod, kullaniciId } = req.body;
-  const aramOturumId = req.headers['x-arama-oturumu'] || null;
+  const rawOturumId = req.headers['x-arama-oturumu'] || null;
+  const aramOturumId = rawOturumId && rawOturumId.length <= 100 && /^[\w-]+$/.test(rawOturumId) ? rawOturumId : null;
   const authHeader = req.headers.authorization || '';
   const rawToken = authHeader.startsWith('Bearer ')
     ? authHeader.slice(7).trim()
@@ -458,10 +456,6 @@ app.post('/api/mesaj', async (req, res) => {
 
   if (mod === 'bilgi_tek' || mod === 'fikir_tek') {
     systemPrompt += tekKartPromptEki(mod);
-  }
-
-  if (!process.env.GEMINI_API_KEY) {
-    console.warn("MOCK_MODU: GEMINI_API_KEY tanimli degil, mock yanit dondurulecek.");
   }
 
   if (mod === 'konu_kilidi') {

@@ -284,10 +284,10 @@ export function useKartlar(
           }
         }
 
-        const hepsiLimitli = sonuclar.every((s) =>
-          s.status === 'fulfilled' ? s.value.limit : true
+        const herhangiLimitVar = sonuclar.some((s) =>
+          s.status === 'fulfilled' && s.value.limit
         );
-        if (basariliSayi > 0 && !hepsiLimitli) onBasari?.(basariliSayi);
+        if (basariliSayi > 0 && !herhangiLimitVar) onBasari?.(basariliSayi);
         if (limitHatasi) {
           onLimitDoldu?.();
           if (basariliSayi === 0) setHata(hataMesajiniGetir('LIMIT_DOLDU', 'Gunluk limitin doldu.'));
