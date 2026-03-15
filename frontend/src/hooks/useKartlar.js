@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef } from 'react';
 import { mesajGonder } from '../services/api.js';
 import { kartArandiBildir, kartTiklandiBildir } from '../services/analytics.js';
-import { konusmaKaydet } from '../services/firestore.js';
+import { konusmaKaydet, detayKaydet, detayGetir } from '../services/firestore.js';
 
 function hataMesajiniGetir(kod, fallback, detay = null) {
   const upstreamStatus = detay?.body?.upstreamStatus;
@@ -161,6 +161,9 @@ export function useKartlar(
   const ilgiliKartlarRef = useRef([]);
   const konuKilidiCevapRef = useRef(null);
 
+  // Oturum içi detay cache — aynı kart tekrar açılınca API çağrısı yapmaz
+  const detayCacheRef = useRef(new Map());
+
   const kartlariGetir = useCallback(
     async (yeniKonu) => {
       if (!yeniKonu?.trim()) return;
@@ -259,9 +262,43 @@ export function useKartlar(
       ilgiliKartlarRef.current = [];
       setKonuKilidiCevap(null);
       konuKilidiCevapRef.current = null;
-      setDetayYukleniyor(true);
       setHata(null);
       kartTiklandiBildir(mod, kart.baslik);
+
+      // 1) Bellek cache kontrolü
+      const cacheKey = `${kart.baslik}||${kart.kanca || ''}`;
+      const cached = detayCacheRef.current.get(cacheKey);
+      if (cached) {
+        setDetayIcerik(cached.detayIcerik);
+        detayIcerikRef.current = cached.detayIcerik;
+        setIlgiliKartlar(cached.ilgiliKartlar || []);
+        ilgiliKartlarRef.current = cached.ilgiliKartlar || [];
+        setDetayYukleniyor(false);
+        return;
+      }
+
+      setDetayYukleniyor(true);
+
+      // 2) Firestore cache kontrolü
+      try {
+        const fsCache = await detayGetir(kart.baslik, kart.kanca);
+        if (fsCache?.detayIcerik) {
+          setDetayIcerik(fsCache.detayIcerik);
+          detayIcerikRef.current = fsCache.detayIcerik;
+          const ilgili = fsCache.ilgiliKartlar || [];
+          setIlgiliKartlar(ilgili);
+          ilgiliKartlarRef.current = ilgili;
+          // Bellek cache'e de ekle
+          detayCacheRef.current.set(cacheKey, {
+            detayIcerik: fsCache.detayIcerik,
+            ilgiliKartlar: ilgili,
+          });
+          setDetayYukleniyor(false);
+          return;
+        }
+      } catch {
+        // Firestore erişilemezse API'ye devam et
+      }
 
       try {
         const detayMesaj = `${kart.baslik}\n\n${kart.kanca || ''}`;
@@ -280,10 +317,13 @@ export function useKartlar(
 
         let basariliSayi = 0;
         let limitHatasi = false;
+        let yeniDetay = null;
+        let yeniIlgili = [];
 
         if (sonuclar[0].status === 'fulfilled') {
-          setDetayIcerik(sonuclar[0].value.yanit);
-          detayIcerikRef.current = sonuclar[0].value.yanit;
+          yeniDetay = sonuclar[0].value.yanit;
+          setDetayIcerik(yeniDetay);
+          detayIcerikRef.current = yeniDetay;
           onLimitGuncelle?.(sonuclar[0].value.limit);
           basariliSayi++;
         } else {
@@ -297,8 +337,9 @@ export function useKartlar(
           onLimitGuncelle?.(sonuclar[1].value.limit);
           const ilgiliParsed = jsonCikar(sonuclar[1].value.yanit);
           if (Array.isArray(ilgiliParsed) && ilgiliParsed.length > 0) {
-            setIlgiliKartlar(ilgiliParsed);
-            ilgiliKartlarRef.current = ilgiliParsed;
+            yeniIlgili = ilgiliParsed;
+            setIlgiliKartlar(yeniIlgili);
+            ilgiliKartlarRef.current = yeniIlgili;
           }
           basariliSayi++;
         } else {
@@ -306,6 +347,15 @@ export function useKartlar(
           if (sonuclar[1].reason?.message === 'LIMIT_DOLDU') {
             limitHatasi = true;
           }
+        }
+
+        // Başarılı sonuçları cache'e kaydet (bellek + Firestore)
+        if (yeniDetay) {
+          detayCacheRef.current.set(cacheKey, {
+            detayIcerik: yeniDetay,
+            ilgiliKartlar: yeniIlgili,
+          });
+          detayKaydet(kart.baslik, kart.kanca, yeniDetay, yeniIlgili).catch(() => {});
         }
 
         const herhangiLimitVar = sonuclar.some((s) =>

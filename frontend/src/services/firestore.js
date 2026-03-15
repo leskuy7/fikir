@@ -3,6 +3,7 @@ import {
   addDoc,
   setDoc,
   doc,
+  getDoc,
   query,
   where,
   limit,
@@ -27,13 +28,40 @@ export async function kullaniciyiKaydet(kullanici) {
 }
 
 export async function konusmaKaydet(kullaniciId, mod, kartlar, konu) {
-  await addDoc(collection(db, 'konusmalar'), {
+  const ref = await addDoc(collection(db, 'konusmalar'), {
     kullaniciId,
     mod,
     kartlar,
     konu,
     tarih: serverTimestamp(),
   });
+  return ref.id;
+}
+
+// Kart detay içeriğini cache olarak kaydet
+export async function detayKaydet(kartBaslik, kartKanca, detayIcerik, ilgiliKartlar) {
+  if (!kartBaslik || !detayIcerik) return;
+  const cacheId = btoa(unescape(encodeURIComponent(`${kartBaslik}||${kartKanca || ''}`))).slice(0, 100);
+  await setDoc(doc(db, 'detay_cache', cacheId), {
+    kartBaslik,
+    kartKanca: kartKanca || '',
+    detayIcerik,
+    ilgiliKartlar: ilgiliKartlar || [],
+    tarih: serverTimestamp(),
+  });
+}
+
+// Kaydedilmiş detay cache'i oku
+export async function detayGetir(kartBaslik, kartKanca) {
+  if (!kartBaslik) return null;
+  const cacheId = btoa(unescape(encodeURIComponent(`${kartBaslik}||${kartKanca || ''}`))).slice(0, 100);
+  try {
+    const snap = await getDoc(doc(db, 'detay_cache', cacheId));
+    if (!snap.exists()) return null;
+    return snap.data();
+  } catch {
+    return null;
+  }
 }
 
 export async function konusmalariGetir(kullaniciId) {
