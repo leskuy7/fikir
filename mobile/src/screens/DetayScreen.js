@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { mesajGonder } from '../services/api';
 import { useLimitContext } from '../context/LimitContext';
+import ReklamBanner from '../components/ReklamBanner';
 import { tema } from '../theme';
 
 function jsonCikar(metin) {
@@ -108,6 +109,8 @@ export default function DetayScreen({ route, navigation }) {
             <Text style={s.detay}>{detay}</Text>
           </View>
         )}
+
+        <ReklamBanner style={{ marginVertical: 12 }} />
 
         {ilgili.length > 0 && (
           <View style={s.ilgiliBolum}>

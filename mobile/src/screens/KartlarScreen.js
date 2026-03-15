@@ -10,6 +10,8 @@ import {
 } from 'react-native';
 import { useKartlar } from '../hooks/useKartlar';
 import { useLimitContext } from '../context/LimitContext';
+import { useInterstitial } from '../hooks/useInterstitial';
+import ReklamBanner from '../components/ReklamBanner';
 import { tema } from '../theme';
 
 const EMOJILER_BILGI = ['💡', '🔭', '⚡', '🧩', '🔄', '🌍'];
@@ -18,6 +20,7 @@ const EMOJILER_FIKIR = ['🚀', '💡', '🎯', '⚡', '🌟', '🔧'];
 export default function KartlarScreen({ route, navigation }) {
   const { konu, mod } = route.params;
   const { limitDoldu, sunucudanGuncelle } = useLimitContext();
+  const { goster: interstitialGoster } = useInterstitial();
   const { kartlar, yukleniyor, hata, kartlariGetir } = useKartlar(mod, null, {
     onLimitDoldu: limitDoldu,
     onLimitGuncelle: sunucudanGuncelle,
@@ -30,6 +33,7 @@ export default function KartlarScreen({ route, navigation }) {
   const emojiler = mod === 'bilgi' ? EMOJILER_BILGI : EMOJILER_FIKIR;
 
   const kartaTikla = async (kart) => {
+    interstitialGoster(); // Her 3. kart açılışında geçiş reklamı
     navigation.navigate('Detay', { kart, mod });
   };
 
@@ -81,6 +85,8 @@ export default function KartlarScreen({ route, navigation }) {
         contentContainerStyle={s.liste}
         showsVerticalScrollIndicator={false}
       />
+
+      <ReklamBanner />
     </SafeAreaView>
   );
 }

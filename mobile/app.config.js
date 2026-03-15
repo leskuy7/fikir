@@ -3,6 +3,9 @@ const appSlug = process.env.EXPO_APP_SLUG || 'fikir-kutusu';
 const androidPackage = process.env.EXPO_ANDROID_PACKAGE || 'com.yksel.fikirkutusu';
 const iosBundleIdentifier = process.env.EXPO_IOS_BUNDLE_IDENTIFIER || 'com.yksel.fikirkutusu';
 
+// AdMob App ID — admob.google.com'dan alacaksın
+const admobAndroidAppId = process.env.ADMOB_ANDROID_APP_ID || 'ca-app-pub-3940256099942544~3347511713'; // test ID
+
 module.exports = {
   expo: {
     name: appName,
@@ -18,6 +21,14 @@ module.exports = {
       backgroundColor: '#060a12',
     },
     assetBundlePatterns: ['**/*'],
+    plugins: [
+      [
+        'react-native-google-mobile-ads',
+        {
+          androidAppId: admobAndroidAppId,
+        },
+      ],
+    ],
     ios: {
       supportsTablet: true,
       bundleIdentifier: iosBundleIdentifier,
