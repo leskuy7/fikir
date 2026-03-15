@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect } from 'react';
 import DOMPurify from 'dompurify';
 import YukleniyorSpinner from './YukleniyorSpinner.jsx';
 import GeriBildirim from './GeriBildirim.jsx';
@@ -11,6 +11,10 @@ export default function KartDetay({
   detayIcerik,
   detayYukleniyor,
   onKapat,
+  onTumunuKapat,
+  onGecmiseGit,
+  kartGecmisi = [],
+  konu,
   mod,
   children,
 }) {
@@ -30,11 +34,40 @@ export default function KartDetay({
         <button
           type="button"
           className="kart-detay__kapat"
-          onClick={onKapat}
+          onClick={onTumunuKapat || onKapat}
           aria-label="Kapat"
         >
-          ×
+          &times;
         </button>
+
+        {/* Breadcrumb navigasyon */}
+        <nav className="kart-detay__breadcrumb" aria-label="Navigasyon">
+          <button
+            type="button"
+            className="kart-detay__breadcrumb-item"
+            onClick={onTumunuKapat || onKapat}
+          >
+            &#x1F3E0; {konu || 'Ana Sayfa'}
+          </button>
+          {kartGecmisi.map((gecmis, i) => (
+            <React.Fragment key={i}>
+              <span className="kart-detay__breadcrumb-ayirac" aria-hidden="true">&rsaquo;</span>
+              <button
+                type="button"
+                className="kart-detay__breadcrumb-item"
+                onClick={() => onGecmiseGit?.(i)}
+                title={gecmis.kart.baslik}
+              >
+                {gecmis.kart.baslik}
+              </button>
+            </React.Fragment>
+          ))}
+          <span className="kart-detay__breadcrumb-ayirac" aria-hidden="true">&rsaquo;</span>
+          <span className="kart-detay__breadcrumb-item kart-detay__breadcrumb-item--aktif">
+            {acikKart.baslik}
+          </span>
+        </nav>
+
         <header className="kart-detay__baslik-wrap">
           <h2 id="kart-detay-baslik" className="kart-detay__baslik">{acikKart.baslik}</h2>
           {acikKart.kanca && (

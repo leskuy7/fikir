@@ -573,6 +573,69 @@
   }
 }
 
+/* Breadcrumb navigasyon */
+.kart-detay__breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 0.5rem 0;
+  margin-bottom: 0.75rem;
+  overflow-x: auto;
+  white-space: nowrap;
+  scrollbar-width: thin;
+  scrollbar-color: var(--card-border) transparent;
+  padding-right: 2.5rem;
+}
+
+.kart-detay__breadcrumb::-webkit-scrollbar {
+  height: 4px;
+}
+
+.kart-detay__breadcrumb::-webkit-scrollbar-thumb {
+  background: var(--card-border);
+  border-radius: 2px;
+}
+
+.kart-detay__breadcrumb-item {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 0.8rem;
+  padding: 0.25rem 0.4rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.kart-detay__breadcrumb-item:hover {
+  background: var(--accent-dim);
+  color: var(--text-primary);
+}
+
+.kart-detay__breadcrumb-item--aktif {
+  color: var(--text-primary);
+  font-weight: 600;
+  cursor: default;
+}
+
+.kart-detay__breadcrumb-item--aktif:hover {
+  background: none;
+  color: var(--text-primary);
+}
+
+.kart-detay__breadcrumb-ayirac {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  margin: 0 0.1rem;
+  opacity: 0.5;
+  flex-shrink: 0;
+}
+
 .kart-detay__kapat {
   position: absolute;
   top: 1rem;

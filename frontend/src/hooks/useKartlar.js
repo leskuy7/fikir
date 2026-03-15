@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { mesajGonder } from '../services/api.js';
 import { kartArandiBildir, kartTiklandiBildir } from '../services/analytics.js';
 import { konusmaKaydet } from '../services/firestore.js';
@@ -153,6 +153,13 @@ export function useKartlar(
   const [konuKilidiYukleniyor, setKonuKilidiYukleniyor] = useState(false);
   const [hata, setHata] = useState(null);
   const [konuKilidiCevap, setKonuKilidiCevap] = useState(null);
+  const [kartGecmisi, setKartGecmisi] = useState([]);
+
+  // Ref'ler — detayAc'da mevcut state'i yakalamak için
+  const acikKartRef = useRef(null);
+  const detayIcerikRef = useRef(null);
+  const ilgiliKartlarRef = useRef([]);
+  const konuKilidiCevapRef = useRef(null);
 
   const kartlariGetir = useCallback(
     async (yeniKonu) => {
@@ -165,6 +172,7 @@ export function useKartlar(
       setDetayIcerik(null);
       setIlgiliKartlar([]);
       setKonuKilidiCevap(null);
+      setKartGecmisi([]);
 
       kartArandiBildir(mod, yeniKonu.trim());
 
@@ -233,10 +241,24 @@ export function useKartlar(
 
   const detayAc = useCallback(
     async (kart) => {
+      // Mevcut açık kart varsa geçmişe kaydet (ref'lerden oku)
+      if (acikKartRef.current) {
+        setKartGecmisi((g) => [...g, {
+          kart: acikKartRef.current,
+          detayIcerik: detayIcerikRef.current,
+          ilgiliKartlar: ilgiliKartlarRef.current,
+          konuKilidiCevap: konuKilidiCevapRef.current,
+        }]);
+      }
+
       setAcikKart(kart);
+      acikKartRef.current = kart;
       setDetayIcerik(null);
+      detayIcerikRef.current = null;
       setIlgiliKartlar([]);
+      ilgiliKartlarRef.current = [];
       setKonuKilidiCevap(null);
+      konuKilidiCevapRef.current = null;
       setDetayYukleniyor(true);
       setHata(null);
       kartTiklandiBildir(mod, kart.baslik);
@@ -261,6 +283,7 @@ export function useKartlar(
 
         if (sonuclar[0].status === 'fulfilled') {
           setDetayIcerik(sonuclar[0].value.yanit);
+          detayIcerikRef.current = sonuclar[0].value.yanit;
           onLimitGuncelle?.(sonuclar[0].value.limit);
           basariliSayi++;
         } else {
@@ -275,6 +298,7 @@ export function useKartlar(
           const ilgiliParsed = jsonCikar(sonuclar[1].value.yanit);
           if (Array.isArray(ilgiliParsed) && ilgiliParsed.length > 0) {
             setIlgiliKartlar(ilgiliParsed);
+            ilgiliKartlarRef.current = ilgiliParsed;
           }
           basariliSayi++;
         } else {
@@ -305,11 +329,63 @@ export function useKartlar(
     [mod, kullaniciId, onBasari, onLimitDoldu, onLimitGuncelle]
   );
 
-  const detayKapat = useCallback(() => {
+  // Breadcrumb'dan belirli bir geçmiş adımına git
+  const gecmiseGit = useCallback((index) => {
+    setKartGecmisi((g) => {
+      if (index < 0 || index >= g.length) return g;
+      const hedef = g[index];
+      setAcikKart(hedef.kart);
+      acikKartRef.current = hedef.kart;
+      setDetayIcerik(hedef.detayIcerik);
+      detayIcerikRef.current = hedef.detayIcerik;
+      setIlgiliKartlar(hedef.ilgiliKartlar || []);
+      ilgiliKartlarRef.current = hedef.ilgiliKartlar || [];
+      setKonuKilidiCevap(hedef.konuKilidiCevap);
+      konuKilidiCevapRef.current = hedef.konuKilidiCevap;
+      // İndex'e kadar olan geçmişi koru
+      return g.slice(0, index);
+    });
+  }, []);
+
+  // Tümünü kapat (X butonu)
+  const detayTumunuKapat = useCallback(() => {
     setAcikKart(null);
+    acikKartRef.current = null;
     setDetayIcerik(null);
+    detayIcerikRef.current = null;
     setIlgiliKartlar([]);
+    ilgiliKartlarRef.current = [];
     setKonuKilidiCevap(null);
+    konuKilidiCevapRef.current = null;
+    setKartGecmisi([]);
+  }, []);
+
+  // ESC/Backdrop — geçmiş varsa geri git, yoksa kapat
+  const detayKapat = useCallback(() => {
+    setKartGecmisi((g) => {
+      if (g.length > 0) {
+        const son = g[g.length - 1];
+        setAcikKart(son.kart);
+        acikKartRef.current = son.kart;
+        setDetayIcerik(son.detayIcerik);
+        detayIcerikRef.current = son.detayIcerik;
+        setIlgiliKartlar(son.ilgiliKartlar || []);
+        ilgiliKartlarRef.current = son.ilgiliKartlar || [];
+        setKonuKilidiCevap(son.konuKilidiCevap);
+        konuKilidiCevapRef.current = son.konuKilidiCevap;
+        return g.slice(0, -1);
+      }
+      // Geçmiş yoksa tümünü kapat
+      setAcikKart(null);
+      acikKartRef.current = null;
+      setDetayIcerik(null);
+      detayIcerikRef.current = null;
+      setIlgiliKartlar([]);
+      ilgiliKartlarRef.current = [];
+      setKonuKilidiCevap(null);
+      konuKilidiCevapRef.current = null;
+      return [];
+    });
   }, []);
 
   const konuKilidiSoru = useCallback(
@@ -331,6 +407,7 @@ export function useKartlar(
         });
         onLimitGuncelle?.(limit);
         setKonuKilidiCevap(yanit);
+        konuKilidiCevapRef.current = yanit;
         if (!limit) onBasari?.();
       } catch (err) {
         onLimitGuncelle?.(err?.limit || null);
@@ -358,9 +435,12 @@ export function useKartlar(
     konuKilidiYukleniyor,
     hata,
     konuKilidiCevap,
+    kartGecmisi,
     kartlariGetir,
     detayAc,
     detayKapat,
+    detayTumunuKapat,
+    gecmiseGit,
     konuKilidiSoru,
   };
 }
