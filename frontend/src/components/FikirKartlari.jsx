@@ -4,6 +4,7 @@ import YukleniyorSpinner from './YukleniyorSpinner.jsx';
 import KartDetay from './KartDetay.jsx';
 import IlgiliKartlar from './IlgiliKartlar.jsx';
 import KonuGirisi from './KonuGirisi.jsx';
+import ReklamAlani from './ReklamAlani.jsx';
 
 const KART_EMOJILERI = ['🚀', '💡', '🎯', '⚡', '🌟', '🔧', '📈', '🔄'];
 
@@ -87,24 +88,31 @@ export default function FikirKartlari({ kullaniciId, limitBag = {}, gecmisIstek 
           </p>
           <div className="kart-grid">
             {kartlar.map((kart, i) => (
-              <button
-                key={`${kart.baslik}-${i}`}
-                type="button"
-                className="card kart-grid__kart"
-                style={{ animationDelay: `${i * 0.07}s` }}
-                onClick={() => detayAc(kart)}
-              >
-                <div className="kart-grid__kart-ust">
-                  <span className="kart-grid__kart-emoji">
-                    {KART_EMOJILERI[i % KART_EMOJILERI.length]}
-                  </span>
-                  <span className="kart-grid__kart-etiket">
-                    Fikir {i + 1}
-                  </span>
-                </div>
-                <span className="kart-grid__kart-baslik">{kart.baslik}</span>
-                <span className="kart-grid__kart-icerik">{kart.kanca}</span>
-              </button>
+              <React.Fragment key={`${kart.baslik}-${i}`}>
+                <button
+                  type="button"
+                  className="card kart-grid__kart"
+                  style={{ animationDelay: `${i * 0.07}s` }}
+                  onClick={() => detayAc(kart)}
+                >
+                  <div className="kart-grid__kart-ust">
+                    <span className="kart-grid__kart-emoji">
+                      {KART_EMOJILERI[i % KART_EMOJILERI.length]}
+                    </span>
+                    <span className="kart-grid__kart-etiket">
+                      Fikir {i + 1}
+                    </span>
+                  </div>
+                  <span className="kart-grid__kart-baslik">{kart.baslik}</span>
+                  <span className="kart-grid__kart-icerik">{kart.kanca}</span>
+                </button>
+                {/* Her 3. karttan sonra reklam göster */}
+                {(i + 1) % 3 === 0 && (
+                  <div className="kart-grid__reklam">
+                    <ReklamAlani slotId={import.meta.env.VITE_ADSENSE_SLOT_KART} />
+                  </div>
+                )}
+              </React.Fragment>
             ))}
           </div>
         </>
