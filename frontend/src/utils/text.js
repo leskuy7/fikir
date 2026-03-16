@@ -10,5 +10,6 @@ export function normalizeIcerik(metin) {
     .replace(/\u2013/g, '-')          // en dash
     .replace(/\u2014/g, ' - ')        // em dash
     .replace(/\u2026/g, '...')        // ellipsis
-    .replace(/\u00A0/g, ' ');         // non-breaking space
+    .replace(/\u00A0/g, ' ')          // non-breaking space
+    .replace(/\uFF03|\uFE5F/g, '#');  // fullwidth/small # → düz #
 }
