@@ -21,9 +21,13 @@ export default function BilgiKartlari({ kullaniciId, limitBag = {}, gecmisIstek 
     konuKilidiYukleniyor,
     hata,
     konuKilidiCevap,
+    kartGecmisi,
+    sonCacheId,
     kartlariGetir,
     detayAc,
     detayKapat,
+    detayTumunuKapat,
+    gecmiseGit,
     konuKilidiSoru,
   } = useKartlar('bilgi', kullaniciId, {
     onBasari: artir,
@@ -111,7 +115,12 @@ export default function BilgiKartlari({ kullaniciId, limitBag = {}, gecmisIstek 
         detayIcerik={detayIcerik}
         detayYukleniyor={detayYukleniyor}
         onKapat={detayKapat}
+        onTumunuKapat={detayTumunuKapat}
+        onGecmiseGit={gecmiseGit}
+        kartGecmisi={kartGecmisi}
+        konu={konu}
         mod="bilgi"
+        cacheId={sonCacheId}
       >
         {acikKart && (
           <>

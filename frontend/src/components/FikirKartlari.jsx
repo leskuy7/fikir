@@ -21,9 +21,13 @@ export default function FikirKartlari({ kullaniciId, limitBag = {}, gecmisIstek 
     konuKilidiYukleniyor,
     hata,
     konuKilidiCevap,
+    kartGecmisi,
+    sonCacheId,
     kartlariGetir,
     detayAc,
     detayKapat,
+    detayTumunuKapat,
+    gecmiseGit,
     konuKilidiSoru,
   } = useKartlar('fikir', kullaniciId, {
     onBasari: artir,
@@ -111,7 +115,12 @@ export default function FikirKartlari({ kullaniciId, limitBag = {}, gecmisIstek 
         detayIcerik={detayIcerik}
         detayYukleniyor={detayYukleniyor}
         onKapat={detayKapat}
+        onTumunuKapat={detayTumunuKapat}
+        onGecmiseGit={gecmiseGit}
+        kartGecmisi={kartGecmisi}
+        konu={konu}
         mod="fikir"
+        cacheId={sonCacheId}
       >
         {acikKart && (
           <>
