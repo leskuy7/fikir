@@ -370,6 +370,32 @@ setInterval(() => {
   }
 }, 60 * 1000);
 
+app.get('/api/limit-durum', async (req, res) => {
+  const authHeader = req.headers.authorization || '';
+  const idToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : null;
+  let dogrulanmisUid = null;
+  if (idToken && firebaseAdminHazir) {
+    dogrulanmisUid = await tokenDogrula(idToken);
+  }
+  const limitAnahtari = dogrulanmisUid ? `uid:${dogrulanmisUid}` : req.ip || 'anon';
+  try {
+    const limitDurum = await limitDurumGetir(limitAnahtari);
+    limitHeaderYaz(res, limitDurum);
+    return apiBasari(res, {
+      limit: {
+        toplam: limitDurum.limit,
+        kalan: limitDurum.kalan,
+        kullanilan: limitDurum.kullanilan,
+      },
+    });
+  } catch (err) {
+    if (err instanceof LimitServisiHatasi) {
+      return apiHata(res, 503, 'LIMIT_SERVISI_KULLANILAMIYOR', 'Limit servisi gecici olarak kullanilamiyor', { retry: false });
+    }
+    throw err;
+  }
+});
+
 app.post('/api/mesaj', async (req, res) => {
   const { mesajlar, mod, kullaniciId } = req.body;
   const rawOturumId = req.headers['x-arama-oturumu'] || null;

@@ -153,6 +153,78 @@
   background: rgba(229, 62, 62, 0.12);
 }
 
+/* ── Limit doldu panel ───────────────── */
+.limit-doldu-panel {
+  max-width: 400px;
+  margin: 0 auto 1.5rem;
+  padding: 1.25rem 1.5rem;
+  text-align: center;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 14px;
+  box-shadow: 0 4px 20px var(--shadow);
+}
+
+.limit-doldu-panel__ikon {
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+  opacity: 0.9;
+}
+
+.limit-doldu-panel__baslik {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0 0 0.5rem;
+}
+
+.limit-doldu-panel__aciklama {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  margin: 0 0 1rem;
+}
+
+.limit-doldu-panel__secenekler {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.limit-doldu-panel__btn {
+  padding: 0.6rem 1.2rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  border-radius: 100px;
+  border: 1px solid var(--accent);
+  background: var(--accent-dim);
+  color: var(--accent);
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+.limit-doldu-panel__btn:hover {
+  background: var(--accent);
+  color: var(--bg);
+}
+
+.limit-doldu-panel__btn--onemli {
+  border-width: 2px;
+}
+
+.limit-doldu-panel__bekle {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.limit-doldu-panel__yakinda {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  opacity: 0.7;
+  margin: 0;
+}
+
 /* ── Mod secici ────────────────────── */
 .mod-secici {
   display: flex;

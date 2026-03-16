@@ -11,7 +11,9 @@ import GizlilikPolitikasi from './components/GizlilikPolitikasi.jsx';
 import PaylasimSayfasi from './components/PaylasimSayfasi.jsx';
 import { useAuth } from './hooks/useAuth.js';
 import { useLimit } from './hooks/useLimit.js';
+import { limitDurumGetir } from './services/api.js';
 import { oturumBittiBildir } from './services/analytics.js';
+import LimitDolduPanel from './components/LimitDolduPanel.jsx';
 import './App.css';
 
 const TEMA_KEY = 'fikir-kutusu-tema';
@@ -44,6 +46,12 @@ function AnaSayfa({ tema, temaSecimi }) {
     return () => window.removeEventListener('beforeunload', handler);
   }, [aktifMod]);
 
+  useEffect(() => {
+    limitDurumGetir().then((limit) => {
+      if (limit) sunucudanGuncelle(limit);
+    }).catch(() => {});
+  }, [sunucudanGuncelle]);
+
   return (
     <>
       <header className="app__header">
@@ -74,6 +82,9 @@ function AnaSayfa({ tema, temaSecimi }) {
         <p className="app__limit-uyari">
           Günlük limitine yaklaşıyorsun — {kalan} istek kaldı.
         </p>
+      )}
+      {limitAsildi && (
+        <LimitDolduPanel kullanici={kullanici} onGirisYap={girisYap} />
       )}
       <div className={aktifMod === 'bilgi' ? 'app__mod' : 'app__mod app__mod--hidden'}>
         <BilgiKartlari

@@ -101,3 +101,15 @@ export async function mesajGonder({ mesajlar, mod, kullaniciId = null, aramOturu
     limit,
   };
 }
+
+export async function limitDurumGetir() {
+  const url = BACKEND_URL ? `${BACKEND_URL}/api/limit-durum` : '/api/limit-durum';
+  const idToken = await getIdToken(false);
+  const headers = {};
+  if (idToken) headers.Authorization = `Bearer ${idToken}`;
+  const response = await fetch(url, { method: 'GET', headers });
+  const limit = parseLimit(response.headers);
+  const body = await cevapJsonOku(response);
+  if (!response.ok) return null;
+  return body?.limit || limit;
+}
