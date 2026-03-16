@@ -31,6 +31,7 @@ function AnaSayfa({ tema, temaSecimi }) {
     cikisYap,
   } = useAuth();
   const kullaniciId = kullanici?.uid || null;
+  const [limitHazir, setLimitHazir] = useState(false);
   const {
     kalan,
     uyari,
@@ -47,9 +48,13 @@ function AnaSayfa({ tema, temaSecimi }) {
   }, [aktifMod]);
 
   useEffect(() => {
-    limitDurumGetir().then((limit) => {
-      if (limit) sunucudanGuncelle(limit);
-    }).catch(() => {});
+    setLimitHazir(false);
+    limitDurumGetir()
+      .then((limit) => {
+        if (limit) sunucudanGuncelle(limit);
+      })
+      .catch(() => {})
+      .finally(() => setLimitHazir(true));
   }, [sunucudanGuncelle]);
 
   return (
@@ -89,14 +94,14 @@ function AnaSayfa({ tema, temaSecimi }) {
       <div className={aktifMod === 'bilgi' ? 'app__mod' : 'app__mod app__mod--hidden'}>
         <BilgiKartlari
           kullaniciId={kullaniciId}
-          limitBag={{ artir, limitDoldu, limitAsildi, sunucudanGuncelle }}
+          limitBag={{ artir, limitDoldu, limitAsildi, limitHazir, sunucudanGuncelle }}
           gecmisIstek={gecmisIstek?.mod === 'bilgi' ? gecmisIstek : null}
         />
       </div>
       <div className={aktifMod === 'fikir' ? 'app__mod' : 'app__mod app__mod--hidden'}>
         <FikirKartlari
           kullaniciId={kullaniciId}
-          limitBag={{ artir, limitDoldu, limitAsildi, sunucudanGuncelle }}
+          limitBag={{ artir, limitDoldu, limitAsildi, limitHazir, sunucudanGuncelle }}
           gecmisIstek={gecmisIstek?.mod === 'fikir' ? gecmisIstek : null}
         />
       </div>

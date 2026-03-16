@@ -9,7 +9,7 @@ import ReklamAlani from './ReklamAlani.jsx';
 const KART_EMOJILERI = ['💡', '🔭', '⚡', '🧩', '🔄', '🌍', '🧬', '📖'];
 
 export default function BilgiKartlari({ kullaniciId, limitBag = {}, gecmisIstek = null }) {
-  const { artir, limitDoldu, limitAsildi, sunucudanGuncelle } = limitBag;
+  const { artir, limitDoldu, limitAsildi, limitHazir = true, sunucudanGuncelle } = limitBag;
   const girdiRef = useRef(null);
   const {
     konu,
@@ -63,9 +63,11 @@ export default function BilgiKartlari({ kullaniciId, limitBag = {}, gecmisIstek 
           className="konu-formu__input"
           aria-label="Aranacak konu"
         />
-        <button type="submit" className="konu-formu__gonder" disabled={yukleniyor || limitAsildi}>
+        <button type="submit" className="konu-formu__gonder" disabled={yukleniyor || !limitHazir || limitAsildi}>
           {yukleniyor ? (
             <span className="konu-formu__gonder-spinner" />
+          ) : !limitHazir ? (
+            <>Yükleniyor...</>
           ) : (
             <>Keşfet</>
           )}
