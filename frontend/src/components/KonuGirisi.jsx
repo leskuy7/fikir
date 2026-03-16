@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import DOMPurify from 'dompurify';
+import { normalizeIcerik } from '../utils/text.js';
 import YukleniyorSpinner from './YukleniyorSpinner.jsx';
 
 export default function KonuGirisi({
@@ -40,7 +41,7 @@ export default function KonuGirisi({
       {yukleniyor && <YukleniyorSpinner metin="Yanıt yazılıyor..." />}
       {cevap && !yukleniyor && (
         <div className="konu-girisi__cevap">
-          {cevap.split('\n\n').map((paragraf, i) => (
+          {normalizeIcerik(cevap).split('\n\n').map((paragraf, i) => (
             <p
               key={i}
               dangerouslySetInnerHTML={{

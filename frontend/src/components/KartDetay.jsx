@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import DOMPurify from 'dompurify';
+import { normalizeIcerik } from '../utils/text.js';
 import YukleniyorSpinner from './YukleniyorSpinner.jsx';
 import GeriBildirim from './GeriBildirim.jsx';
 import KartPaylas from './KartPaylas.jsx';
@@ -80,7 +81,7 @@ export default function KartDetay({
             <YukleniyorSpinner metin="Detay yükleniyor..." />
           ) : detayIcerik ? (
             <div className="kart-detay__icerik">
-              {detayIcerik.split('\n\n').map((paragraf, i) => (
+              {normalizeIcerik(detayIcerik).split('\n\n').map((paragraf, i) => (
                 <p
                   key={i}
                   dangerouslySetInnerHTML={{

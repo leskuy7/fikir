@@ -766,6 +766,8 @@
   font-size: 0.95rem;
   line-height: 1.75;
   color: var(--text-primary);
+  /* Tüm Unicode karakterlerin (Türkçe, noktalama, semboller) doğru görünmesi için fallback */
+  font-family: var(--font-body), "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 .kart-detay__icerik p {
@@ -890,6 +892,7 @@
   background: var(--bg-secondary);
   border-radius: 14px;
   border: 1px solid var(--card-border);
+  font-family: var(--font-body), "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   font-size: 0.92rem;
   line-height: 1.65;
   color: var(--text-primary);
@@ -1477,6 +1480,7 @@
   line-height: 1.7;
   font-size: 0.95rem;
   color: var(--color-text, #e0e0e0);
+  font-family: var(--font-body), "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 .paylasim-sayfa__icerik p {

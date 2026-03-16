@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import DOMPurify from 'dompurify';
+import { normalizeIcerik } from '../utils/text.js';
 import { detayGetirById } from '../services/firestore.js';
 import YukleniyorSpinner from './YukleniyorSpinner.jsx';
 
@@ -60,7 +61,7 @@ export default function PaylasimSayfasi() {
         </header>
 
         <div className="paylasim-sayfa__icerik">
-          {veri.detayIcerik?.split('\n\n').map((paragraf, i) => (
+          {normalizeIcerik(veri.detayIcerik ?? '').split('\n\n').filter(Boolean).map((paragraf, i) => (
             <p
               key={i}
               dangerouslySetInnerHTML={{
