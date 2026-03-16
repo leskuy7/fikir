@@ -1,0 +1,9 @@
+# Railway/Nixpacks build: Node 20, sadece production dependencies
+[phases.setup]
+nixPkgs = ["nodejs_20"]
+
+[phases.install]
+cmds = ["npm ci --omit=dev"]
+
+[start]
+cmd = "node server.js"

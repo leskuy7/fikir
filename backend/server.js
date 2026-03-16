@@ -441,6 +441,10 @@ app.post('/api/mesaj', async (req, res) => {
     });
   }
 
+  if (!process.env.GEMINI_API_KEY) {
+    return apiHata(res, 500, 'SUNUCU_HATASI', 'GEMINI_API_KEY tanimli degil');
+  }
+
   const tekMod = mod === 'bilgi_tek' || mod === 'fikir_tek';
   const zatenSayildi = tekMod && aramOturumId && sayilanOturumlar.has(aramOturumId);
   let weReserved = false;
