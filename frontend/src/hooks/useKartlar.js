@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef } from 'react';
 import { mesajGonder } from '../services/api.js';
 import { kartArandiBildir, kartTiklandiBildir } from '../services/analytics.js';
-import { konusmaKaydet, detayKaydet, detayGetir } from '../services/firestore.js';
+import { konusmaKaydet, detayKaydet, detayGetir, detayCacheId } from '../services/firestore.js';
 
 function hataMesajiniGetir(kod, fallback, detay = null) {
   const upstreamStatus = detay?.body?.upstreamStatus;
@@ -154,14 +154,14 @@ export function useKartlar(
   const [hata, setHata] = useState(null);
   const [konuKilidiCevap, setKonuKilidiCevap] = useState(null);
   const [kartGecmisi, setKartGecmisi] = useState([]);
+  const [sonCacheId, setSonCacheId] = useState(null);
 
-  // Ref'ler — detayAc'da mevcut state'i yakalamak için
+  // Refs: mevcut state'i yakalamak için (detayAc'ta history push)
   const acikKartRef = useRef(null);
   const detayIcerikRef = useRef(null);
   const ilgiliKartlarRef = useRef([]);
   const konuKilidiCevapRef = useRef(null);
-
-  // Oturum içi detay cache — aynı kart tekrar açılınca API çağrısı yapmaz
+  // In-memory detay cache
   const detayCacheRef = useRef(new Map());
 
   const kartlariGetir = useCallback(
@@ -244,14 +244,17 @@ export function useKartlar(
 
   const detayAc = useCallback(
     async (kart) => {
-      // Mevcut açık kart varsa geçmişe kaydet (ref'lerden oku)
+      // Mevcut açık kart varsa → geçmişe ekle
       if (acikKartRef.current) {
-        setKartGecmisi((g) => [...g, {
-          kart: acikKartRef.current,
-          detayIcerik: detayIcerikRef.current,
-          ilgiliKartlar: ilgiliKartlarRef.current,
-          konuKilidiCevap: konuKilidiCevapRef.current,
-        }]);
+        setKartGecmisi((onceki) => [
+          ...onceki,
+          {
+            kart: acikKartRef.current,
+            detayIcerik: detayIcerikRef.current,
+            ilgiliKartlar: ilgiliKartlarRef.current,
+            konuKilidiCevap: konuKilidiCevapRef.current,
+          },
+        ]);
       }
 
       setAcikKart(kart);
@@ -262,44 +265,47 @@ export function useKartlar(
       ilgiliKartlarRef.current = [];
       setKonuKilidiCevap(null);
       konuKilidiCevapRef.current = null;
+      setSonCacheId(null);
+      setDetayYukleniyor(true);
       setHata(null);
       kartTiklandiBildir(mod, kart.baslik);
 
-      // 1) Bellek cache kontrolü
+      // 1) In-memory cache kontrol
       const cacheKey = `${kart.baslik}||${kart.kanca || ''}`;
-      const cached = detayCacheRef.current.get(cacheKey);
-      if (cached) {
-        setDetayIcerik(cached.detayIcerik);
-        detayIcerikRef.current = cached.detayIcerik;
-        setIlgiliKartlar(cached.ilgiliKartlar || []);
-        ilgiliKartlarRef.current = cached.ilgiliKartlar || [];
+      const memCache = detayCacheRef.current.get(cacheKey);
+      if (memCache) {
+        setDetayIcerik(memCache.detayIcerik);
+        detayIcerikRef.current = memCache.detayIcerik;
+        setIlgiliKartlar(memCache.ilgiliKartlar || []);
+        ilgiliKartlarRef.current = memCache.ilgiliKartlar || [];
+        setSonCacheId(detayCacheId(kart.baslik, kart.kanca));
         setDetayYukleniyor(false);
         return;
       }
 
-      setDetayYukleniyor(true);
-
-      // 2) Firestore cache kontrolü
+      // 2) Firestore cache kontrol
       try {
-        const fsCache = await detayGetir(kart.baslik, kart.kanca);
-        if (fsCache?.detayIcerik) {
-          setDetayIcerik(fsCache.detayIcerik);
-          detayIcerikRef.current = fsCache.detayIcerik;
-          const ilgili = fsCache.ilgiliKartlar || [];
+        const firestoreCache = await detayGetir(kart.baslik, kart.kanca);
+        if (firestoreCache?.detayIcerik) {
+          setDetayIcerik(firestoreCache.detayIcerik);
+          detayIcerikRef.current = firestoreCache.detayIcerik;
+          const ilgili = firestoreCache.ilgiliKartlar || [];
           setIlgiliKartlar(ilgili);
           ilgiliKartlarRef.current = ilgili;
-          // Bellek cache'e de ekle
+          setSonCacheId(detayCacheId(kart.baslik, kart.kanca));
+          // Memory cache'e de ekle
           detayCacheRef.current.set(cacheKey, {
-            detayIcerik: fsCache.detayIcerik,
+            detayIcerik: firestoreCache.detayIcerik,
             ilgiliKartlar: ilgili,
           });
           setDetayYukleniyor(false);
           return;
         }
       } catch {
-        // Firestore erişilemezse API'ye devam et
+        // Cache hatası önemsiz, API'ye devam
       }
 
+      // 3) API çağrısı
       try {
         const detayMesaj = `${kart.baslik}\n\n${kart.kanca || ''}`;
         const sonuclar = await Promise.allSettled([
@@ -349,19 +355,20 @@ export function useKartlar(
           }
         }
 
-        // Başarılı sonuçları cache'e kaydet (bellek + Firestore)
+        // Cache'e kaydet
         if (yeniDetay) {
           detayCacheRef.current.set(cacheKey, {
             detayIcerik: yeniDetay,
             ilgiliKartlar: yeniIlgili,
           });
-          detayKaydet(kart.baslik, kart.kanca, yeniDetay, yeniIlgili).catch(() => {});
+          detayKaydet(kart.baslik, kart.kanca, yeniDetay, yeniIlgili)
+            .then((id) => { if (id) setSonCacheId(id); })
+            .catch(() => {});
         }
-
-        const herhangiLimitVar = sonuclar.some((s) =>
-          s.status === 'fulfilled' && s.value.limit
+        const hepsiLimitli = sonuclar.every((s) =>
+          s.status === 'fulfilled' ? s.value.limit : true
         );
-        if (basariliSayi > 0 && !herhangiLimitVar) onBasari?.(basariliSayi);
+        if (basariliSayi > 0 && !hepsiLimitli) onBasari?.(basariliSayi);
         if (limitHatasi) {
           onLimitDoldu?.();
           if (basariliSayi === 0) setHata(hataMesajiniGetir('LIMIT_DOLDU', 'Gunluk limitin doldu.'));
@@ -379,25 +386,37 @@ export function useKartlar(
     [mod, kullaniciId, onBasari, onLimitDoldu, onLimitGuncelle]
   );
 
-  // Breadcrumb'dan belirli bir geçmiş adımına git
-  const gecmiseGit = useCallback((index) => {
-    setKartGecmisi((g) => {
-      if (index < 0 || index >= g.length) return g;
-      const hedef = g[index];
-      setAcikKart(hedef.kart);
-      acikKartRef.current = hedef.kart;
-      setDetayIcerik(hedef.detayIcerik);
-      detayIcerikRef.current = hedef.detayIcerik;
-      setIlgiliKartlar(hedef.ilgiliKartlar || []);
-      ilgiliKartlarRef.current = hedef.ilgiliKartlar || [];
-      setKonuKilidiCevap(hedef.konuKilidiCevap);
-      konuKilidiCevapRef.current = hedef.konuKilidiCevap;
-      // İndex'e kadar olan geçmişi koru
-      return g.slice(0, index);
+  // ESC / backdrop: geçmiş varsa geri git, yoksa kapat
+  const detayKapat = useCallback(() => {
+    setKartGecmisi((onceki) => {
+      if (onceki.length === 0) {
+        setAcikKart(null);
+        acikKartRef.current = null;
+        setDetayIcerik(null);
+        detayIcerikRef.current = null;
+        setIlgiliKartlar([]);
+        ilgiliKartlarRef.current = [];
+        setKonuKilidiCevap(null);
+        konuKilidiCevapRef.current = null;
+        setSonCacheId(null);
+        return [];
+      }
+      const yeniGecmis = [...onceki];
+      const geri = yeniGecmis.pop();
+      setAcikKart(geri.kart);
+      acikKartRef.current = geri.kart;
+      setDetayIcerik(geri.detayIcerik);
+      detayIcerikRef.current = geri.detayIcerik;
+      setIlgiliKartlar(geri.ilgiliKartlar || []);
+      ilgiliKartlarRef.current = geri.ilgiliKartlar || [];
+      setKonuKilidiCevap(geri.konuKilidiCevap || null);
+      konuKilidiCevapRef.current = geri.konuKilidiCevap || null;
+      setSonCacheId(geri.kart ? detayCacheId(geri.kart.baslik, geri.kart.kanca) : null);
+      return yeniGecmis;
     });
   }, []);
 
-  // Tümünü kapat (X butonu)
+  // X butonu: tümünü kapat
   const detayTumunuKapat = useCallback(() => {
     setAcikKart(null);
     acikKartRef.current = null;
@@ -408,33 +427,24 @@ export function useKartlar(
     setKonuKilidiCevap(null);
     konuKilidiCevapRef.current = null;
     setKartGecmisi([]);
+    setSonCacheId(null);
   }, []);
 
-  // ESC/Backdrop — geçmiş varsa geri git, yoksa kapat
-  const detayKapat = useCallback(() => {
-    setKartGecmisi((g) => {
-      if (g.length > 0) {
-        const son = g[g.length - 1];
-        setAcikKart(son.kart);
-        acikKartRef.current = son.kart;
-        setDetayIcerik(son.detayIcerik);
-        detayIcerikRef.current = son.detayIcerik;
-        setIlgiliKartlar(son.ilgiliKartlar || []);
-        ilgiliKartlarRef.current = son.ilgiliKartlar || [];
-        setKonuKilidiCevap(son.konuKilidiCevap);
-        konuKilidiCevapRef.current = son.konuKilidiCevap;
-        return g.slice(0, -1);
-      }
-      // Geçmiş yoksa tümünü kapat
-      setAcikKart(null);
-      acikKartRef.current = null;
-      setDetayIcerik(null);
-      detayIcerikRef.current = null;
-      setIlgiliKartlar([]);
-      ilgiliKartlarRef.current = [];
-      setKonuKilidiCevap(null);
-      konuKilidiCevapRef.current = null;
-      return [];
+  // Breadcrumb: belirli bir adıma git
+  const gecmiseGit = useCallback((index) => {
+    setKartGecmisi((onceki) => {
+      if (index < 0 || index >= onceki.length) return onceki;
+      const hedef = onceki[index];
+      setAcikKart(hedef.kart);
+      acikKartRef.current = hedef.kart;
+      setDetayIcerik(hedef.detayIcerik);
+      detayIcerikRef.current = hedef.detayIcerik;
+      setIlgiliKartlar(hedef.ilgiliKartlar || []);
+      ilgiliKartlarRef.current = hedef.ilgiliKartlar || [];
+      setKonuKilidiCevap(hedef.konuKilidiCevap || null);
+      konuKilidiCevapRef.current = hedef.konuKilidiCevap || null;
+      setSonCacheId(hedef.kart ? detayCacheId(hedef.kart.baslik, hedef.kart.kanca) : null);
+      return onceki.slice(0, index);
     });
   }, []);
 
@@ -486,6 +496,7 @@ export function useKartlar(
     hata,
     konuKilidiCevap,
     kartGecmisi,
+    sonCacheId,
     kartlariGetir,
     detayAc,
     detayKapat,

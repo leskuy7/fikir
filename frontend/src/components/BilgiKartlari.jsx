@@ -23,6 +23,7 @@ export default function BilgiKartlari({ kullaniciId, limitBag = {}, gecmisIstek 
     hata,
     konuKilidiCevap,
     kartGecmisi,
+    sonCacheId,
     kartlariGetir,
     detayAc,
     detayKapat,
@@ -131,6 +132,7 @@ export default function BilgiKartlari({ kullaniciId, limitBag = {}, gecmisIstek 
         kartGecmisi={kartGecmisi}
         konu={konu}
         mod="bilgi"
+        cacheId={sonCacheId}
       >
         {acikKart && (
           <>

@@ -16,6 +16,7 @@ export default function KartDetay({
   kartGecmisi = [],
   konu,
   mod,
+  cacheId,
   children,
 }) {
   useEffect(() => {
@@ -92,7 +93,7 @@ export default function KartDetay({
           {detayIcerik && !detayYukleniyor && (
             <div className="kart-detay__aksiyonlar">
               <GeriBildirim mod={mod || 'detay'} kartBaslik={acikKart.baslik} />
-              <KartPaylas kartElementId={DETAY_ID} kartBaslik={acikKart.baslik} />
+              <KartPaylas kartElementId={DETAY_ID} kartBaslik={acikKart.baslik} cacheId={cacheId} />
             </div>
           )}
         </div>

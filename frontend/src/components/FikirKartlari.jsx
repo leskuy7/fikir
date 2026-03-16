@@ -23,6 +23,7 @@ export default function FikirKartlari({ kullaniciId, limitBag = {}, gecmisIstek 
     hata,
     konuKilidiCevap,
     kartGecmisi,
+    sonCacheId,
     kartlariGetir,
     detayAc,
     detayKapat,
@@ -131,6 +132,7 @@ export default function FikirKartlari({ kullaniciId, limitBag = {}, gecmisIstek 
         kartGecmisi={kartGecmisi}
         konu={konu}
         mod="fikir"
+        cacheId={sonCacheId}
       >
         {acikKart && (
           <>

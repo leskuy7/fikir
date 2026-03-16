@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Routes, Route } from 'react-router-dom';
 import ModSecici from './components/ModSecici.jsx';
 import BilgiKartlari from './components/BilgiKartlari.jsx';
 import FikirKartlari from './components/FikirKartlari.jsx';
@@ -7,6 +8,7 @@ import KullaniciPaneli from './components/KullaniciPaneli.jsx';
 import GecmisPanel from './components/GecmisPanel.jsx';
 import CerezBildirimi from './components/CerezBildirimi.jsx';
 import GizlilikPolitikasi from './components/GizlilikPolitikasi.jsx';
+import PaylasimSayfasi from './components/PaylasimSayfasi.jsx';
 import { useAuth } from './hooks/useAuth.js';
 import { useLimit } from './hooks/useLimit.js';
 import { oturumBittiBildir } from './services/analytics.js';
@@ -14,14 +16,11 @@ import './App.css';
 
 const TEMA_KEY = 'fikir-kutusu-tema';
 
-export default function App() {
+function AnaSayfa({ tema, temaSecimi }) {
   const [aktifMod, setAktifMod] = useState('bilgi');
   const [gizlilikAcik, setGizlilikAcik] = useState(false);
   const [gecmisAcik, setGecmisAcik] = useState(false);
   const [gecmisIstek, setGecmisIstek] = useState(null);
-  const [tema, setTema] = useState(() => {
-    return localStorage.getItem(TEMA_KEY) || 'kozmik';
-  });
   const {
     kullanici,
     yukleniyor: authYukleniyor,
@@ -40,23 +39,13 @@ export default function App() {
   } = useLimit(kullaniciId);
 
   useEffect(() => {
-    document.body.setAttribute('data-theme', tema);
-  }, [tema]);
-
-  useEffect(() => {
     const handler = () => oturumBittiBildir(aktifMod);
     window.addEventListener('beforeunload', handler);
     return () => window.removeEventListener('beforeunload', handler);
   }, [aktifMod]);
 
-  const temaSecimi = (yeniTema) => {
-    setTema(yeniTema);
-    localStorage.setItem(TEMA_KEY, yeniTema);
-    document.body.setAttribute('data-theme', yeniTema);
-  };
-
   return (
-    <div className="app" data-theme={tema}>
+    <>
       <header className="app__header">
         <KullaniciPaneli
           kullanici={kullanici}
@@ -139,6 +128,31 @@ export default function App() {
       )}
       {gizlilikAcik && <GizlilikPolitikasi onKapat={() => setGizlilikAcik(false)} />}
       <CerezBildirimi onGizlilikAc={() => setGizlilikAcik(true)} />
+    </>
+  );
+}
+
+export default function App() {
+  const [tema, setTema] = useState(() => {
+    return localStorage.getItem(TEMA_KEY) || 'kozmik';
+  });
+
+  useEffect(() => {
+    document.body.setAttribute('data-theme', tema);
+  }, [tema]);
+
+  const temaSecimi = (yeniTema) => {
+    setTema(yeniTema);
+    localStorage.setItem(TEMA_KEY, yeniTema);
+    document.body.setAttribute('data-theme', yeniTema);
+  };
+
+  return (
+    <div className="app" data-theme={tema}>
+      <Routes>
+        <Route path="/" element={<AnaSayfa tema={tema} temaSecimi={temaSecimi} />} />
+        <Route path="/paylas/:cacheId" element={<PaylasimSayfasi />} />
+      </Routes>
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import { BrowserRouter } from 'react-router-dom'
 import './index.css'
 import './themes/gazete.css'
 import './themes/kozmik.css'
@@ -11,8 +12,10 @@ initGA()
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <HataSiniri>
-      <App />
-    </HataSiniri>
+    <BrowserRouter>
+      <HataSiniri>
+        <App />
+      </HataSiniri>
+    </BrowserRouter>
   </StrictMode>,
 )
