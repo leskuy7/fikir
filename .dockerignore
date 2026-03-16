@@ -1,0 +1,10 @@
+# Repo kokunden build alinirken kopyalanmasin
+node_modules
+backend/node_modules
+frontend
+mobile
+.claude
+.env
+.env.*
+*.log
+.git
