@@ -4,6 +4,7 @@ import { normalizeIcerik } from '../utils/text.js';
 import YukleniyorSpinner from './YukleniyorSpinner.jsx';
 import GeriBildirim from './GeriBildirim.jsx';
 import KartPaylas from './KartPaylas.jsx';
+import ReklamAlani from './ReklamAlani.jsx';
 
 const DETAY_ID = 'kart-detay-paylasim';
 
@@ -99,6 +100,11 @@ export default function KartDetay({
           )}
         </div>
         {children}
+
+        {/* Detay içi reklam */}
+        <div className="reklam-detay">
+          <ReklamAlani slot="detay" />
+        </div>
       </div>
     </div>
   );

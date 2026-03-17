@@ -9,7 +9,7 @@ import ReklamAlani from './ReklamAlani.jsx';
 const KART_EMOJILERI = ['🚀', '💡', '🎯', '⚡', '🌟', '🔧', '📈', '🔄'];
 
 export default function FikirKartlari({ kullaniciId, limitBag = {}, gecmisIstek = null }) {
-  const { artir, limitDoldu, limitAsildi, limitHazir = true, sunucudanGuncelle } = limitBag;
+  const { artir, limitDoldu, limitAsildi, limitHazir = false, sunucudanGuncelle } = limitBag;
   const girdiRef = useRef(null);
   const {
     konu,
@@ -34,6 +34,7 @@ export default function FikirKartlari({ kullaniciId, limitBag = {}, gecmisIstek 
     onBasari: artir,
     onLimitDoldu: limitDoldu,
     onLimitGuncelle: sunucudanGuncelle,
+    onLimitKontrol: () => limitAsildi || !limitHazir,
   });
 
   const sonGonderimRef = useRef(0);
@@ -115,7 +116,7 @@ export default function FikirKartlari({ kullaniciId, limitBag = {}, gecmisIstek 
                 {/* Her 3. karttan sonra reklam göster */}
                 {(i + 1) % 3 === 0 && (
                   <div className="kart-grid__reklam">
-                    <ReklamAlani slotId={import.meta.env.VITE_ADSENSE_SLOT_KART} />
+                    <ReklamAlani slot="kart" />
                   </div>
                 )}
               </React.Fragment>

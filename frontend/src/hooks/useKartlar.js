@@ -141,7 +141,7 @@ async function kartlariGetirVeGoster({ konuMetni, mod, kullaniciId, setKartlar }
 export function useKartlar(
   mod,
   kullaniciId = null,
-  { onBasari, onLimitDoldu, onLimitGuncelle } = {}
+  { onBasari, onLimitDoldu, onLimitGuncelle, onLimitKontrol } = {}
 ) {
   const [konu, setKonu] = useState('');
   const [kartlar, setKartlar] = useState([]);
@@ -167,6 +167,10 @@ export function useKartlar(
   const kartlariGetir = useCallback(
     async (yeniKonu) => {
       if (!yeniKonu?.trim()) return;
+      if (onLimitKontrol?.()) {
+        setHata('Günlük limitin doldu.');
+        return;
+      }
       setHata(null);
       setYukleniyor(true);
       setKonu(yeniKonu.trim());

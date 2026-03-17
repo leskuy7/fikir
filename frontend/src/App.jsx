@@ -14,6 +14,7 @@ import { useLimit } from './hooks/useLimit.js';
 import { limitDurumGetir } from './services/api.js';
 import { oturumBittiBildir } from './services/analytics.js';
 import LimitDolduPanel from './components/LimitDolduPanel.jsx';
+import ReklamAlani from './components/ReklamAlani.jsx';
 import './App.css';
 
 const TEMA_KEY = 'fikir-kutusu-tema';
@@ -31,11 +32,11 @@ function AnaSayfa({ tema, temaSecimi }) {
     cikisYap,
   } = useAuth();
   const kullaniciId = kullanici?.uid || null;
-  const [limitHazir, setLimitHazir] = useState(false);
   const {
     kalan,
     uyari,
     limitAsildi,
+    hazir: limitHazir,
     artir,
     limitDoldu,
     sunucudanGuncelle,
@@ -48,13 +49,13 @@ function AnaSayfa({ tema, temaSecimi }) {
   }, [aktifMod]);
 
   useEffect(() => {
-    setLimitHazir(false);
     limitDurumGetir()
       .then((limit) => {
-        if (limit) sunucudanGuncelle(limit);
+        sunucudanGuncelle(limit || null);
       })
-      .catch(() => {})
-      .finally(() => setLimitHazir(true));
+      .catch(() => {
+        sunucudanGuncelle(null);
+      });
   }, [sunucudanGuncelle]);
 
   return (
@@ -77,6 +78,11 @@ function AnaSayfa({ tema, temaSecimi }) {
         <h1 className="app__baslik">Fikir Kutusu</h1>
         <p className="app__altbaslik">Merak et, keşfet, ilham al</p>
         <div className="app__ayirac" aria-hidden="true" />
+      </div>
+
+      {/* Hero altı banner reklam */}
+      <div className="reklam-banner">
+        <ReklamAlani slot="banner" />
       </div>
 
       <ModSecici aktif={aktifMod} onChange={setAktifMod} />
@@ -104,6 +110,11 @@ function AnaSayfa({ tema, temaSecimi }) {
           limitBag={{ artir, limitDoldu, limitAsildi, limitHazir, sunucudanGuncelle }}
           gecmisIstek={gecmisIstek?.mod === 'fikir' ? gecmisIstek : null}
         />
+      </div>
+
+      {/* Footer üstü reklam */}
+      <div className="reklam-footer">
+        <ReklamAlani slot="banner" />
       </div>
 
       <footer className="app__footer">

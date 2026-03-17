@@ -82,6 +82,7 @@ export function useLimit(kullaniciId = null) {
 
   const [sunucuDurumu, setSunucuDurumu] = useState({ key: null, limit: null });
   const sunucuLimit = sunucuDurumu.key === key ? sunucuDurumu.limit : null;
+  const [hazir, setHazir] = useState(false);
 
   const artir = useCallback((miktar = 1) => {
     const data = oku(key);
@@ -96,18 +97,25 @@ export function useLimit(kullaniciId = null) {
   }, [key, limit]);
 
   const sunucudanGuncelle = useCallback((limitBilgisi) => {
-    if (!limitBilgisi) return;
+    if (!limitBilgisi) {
+      setHazir(true);
+      return;
+    }
 
     const toplam = Number(limitBilgisi.toplam);
     const kalan = Number(limitBilgisi.kalan);
     const kullanilan = Number(limitBilgisi.kullanilan);
-    if ([toplam, kalan, kullanilan].some((v) => Number.isNaN(v))) return;
+    if ([toplam, kalan, kullanilan].some((v) => Number.isNaN(v))) {
+      setHazir(true);
+      return;
+    }
 
     setSunucuDurumu({ key, limit: { toplam, kalan, kullanilan } });
 
     const data = oku(key);
     const yeni = { gun: data.gun, sayi: Math.max(0, Math.min(kullanilan, limit)) };
     yaz(key, yeni);
+    setHazir(true);
   }, [key, limit]);
   const efektifToplam = sunucuLimit?.toplam ?? limit;
   const efektifKalan = Number.isInteger(sunucuLimit?.kalan)
@@ -117,5 +125,5 @@ export function useLimit(kullaniciId = null) {
   const uyari = efektifKullanilan >= efektifToplam - 2 && efektifKullanilan < efektifToplam;
   const limitAsildi = efektifKalan <= 0;
 
-  return { kalan: efektifKalan, uyari, limitAsildi, artir, limitDoldu, sunucudanGuncelle };
+  return { kalan: efektifKalan, uyari, limitAsildi, hazir, artir, limitDoldu, sunucudanGuncelle };
 }
