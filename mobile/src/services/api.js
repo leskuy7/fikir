@@ -92,3 +92,37 @@ export async function mesajGonder({ mesajlar, mod, kullaniciId = null, aramOturu
     limit,
   };
 }
+
+export async function reklamOdulAl() {
+  if (!BACKEND_URL) {
+    throw hataUret('BACKEND_URL_YOK');
+  }
+
+  const istegiGonder = async (forceRefresh = false) => {
+    const idToken = await getIdToken(forceRefresh);
+    const headers = { 'Content-Type': 'application/json' };
+    if (idToken) headers.Authorization = `Bearer ${idToken}`;
+    return fetch(`${BACKEND_URL}/api/reklam-odul`, {
+      method: 'POST',
+      headers,
+    });
+  };
+
+  let response = await istegiGonder(false);
+  if (response.status === 401) {
+    response = await istegiGonder(true);
+  }
+
+  const limit = parseLimit(response.headers);
+  const body = await cevapJsonOku(response);
+
+  if (!response.ok) {
+    const kod = hataKoduMaple(response, body);
+    throw hataUret(kod, response.status, { limit, body });
+  }
+
+  return {
+    limit,
+    odul: body?.odul || null,
+  };
+}

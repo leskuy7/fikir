@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { InterstitialAd, AdEventType, TestIds } from 'react-native-google-mobile-ads';
 
 const INTERSTITIAL_ID = __DEV__
@@ -11,20 +11,31 @@ let acilisSayaci = 0;
 
 export function useInterstitial() {
   const adRef = useRef(null);
+  const [hazir, setHazir] = useState(false);
+  const onClosedRef = useRef(null);
 
   useEffect(() => {
     const ad = InterstitialAd.createForAdRequest(INTERSTITIAL_ID, {
       requestNonPersonalizedAdsOnly: true,
     });
 
-    const onLoaded = () => {
-      adRef.current = ad;
-    };
+    adRef.current = ad;
 
-    const unsubLoaded = ad.addAdEventListener(AdEventType.LOADED, onLoaded);
+    const unsubLoaded = ad.addAdEventListener(AdEventType.LOADED, () => {
+      setHazir(true);
+    });
     const unsubClosed = ad.addAdEventListener(AdEventType.CLOSED, () => {
       // Reklam kapandığında yenisini yükle
+      setHazir(false);
       ad.load();
+      const cb = onClosedRef.current;
+      onClosedRef.current = null;
+      if (typeof cb === 'function') cb();
+    });
+    const unsubError = ad.addAdEventListener(AdEventType.ERROR, () => {
+      setHazir(false);
+      ad.load();
+      onClosedRef.current = null;
     });
 
     ad.load();
@@ -32,15 +43,30 @@ export function useInterstitial() {
     return () => {
       unsubLoaded();
       unsubClosed();
+      unsubError();
     };
   }, []);
 
-  const goster = () => {
-    acilisSayaci += 1;
-    if (acilisSayaci % HER_N_ACILIS === 0 && adRef.current?.loaded) {
+  const gosterZorla = useCallback((opts = {}) => {
+    const onClosed = typeof opts?.onClosed === 'function' ? opts.onClosed : null;
+    if (adRef.current && hazir) {
+      onClosedRef.current = onClosed;
       adRef.current.show();
+      return true;
     }
-  };
+    onClosedRef.current = null;
+    return false;
+  }, [hazir]);
 
-  return { goster };
+  const goster = useCallback((opts = {}) => {
+    const force = opts?.force === true;
+    if (force) return gosterZorla(opts);
+    acilisSayaci += 1;
+    if (acilisSayaci % HER_N_ACILIS === 0) {
+      return gosterZorla(opts);
+    }
+    return false;
+  }, [gosterZorla]);
+
+  return { goster, hazir };
 }

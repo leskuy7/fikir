@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,8 @@ import {
   SafeAreaView,
 } from 'react-native';
 import { useLimitContext } from '../context/LimitContext';
+import { useRewardedAd } from '../hooks/useRewardedAd';
+import { reklamOdulAl } from '../services/api';
 import { tema } from '../theme';
 
 const MODLAR = [
@@ -18,12 +20,47 @@ const MODLAR = [
 export default function HomeScreen({ navigation }) {
   const [girdi, setGirdi] = useState('');
   const [aktifMod, setAktifMod] = useState('bilgi');
-  const { kalan, uyari, limitAsildi } = useLimitContext();
+  const { kalan, uyari, limitAsildi, sunucudanGuncelle } = useLimitContext();
+  const { goster: odulReklamiGoster, hazir: odulReklamiHazir } = useRewardedAd();
+  const [odulYukleniyor, setOdulYukleniyor] = useState(false);
+  const [odulMesaj, setOdulMesaj] = useState('');
+
+  const odulMesajiGetir = useCallback((kod) => {
+    if (kod === 'ODUL_LIMIT_DOLDU') return 'Günlük reklam ödül hakkın doldu.';
+    if (kod === 'LIMIT_SERVISI_KULLANILAMIYOR') return 'Limit servisi geçici olarak kullanılamıyor.';
+    if (kod === 'BACKEND_URL_YOK') return 'Sunucu adresi bulunamadı.';
+    return 'Reklam ödülü alınamadı. Birazdan tekrar dene.';
+  }, []);
+
+  const reklamIzle = useCallback(() => {
+    if (odulYukleniyor) return;
+    setOdulMesaj('');
+    const gosterildi = odulReklamiGoster({
+      onReward: async () => {
+        setOdulYukleniyor(true);
+        try {
+          const { limit } = await reklamOdulAl();
+          sunucudanGuncelle(limit);
+          setOdulMesaj('');
+        } catch (err) {
+          setOdulMesaj(odulMesajiGetir(err.message));
+        } finally {
+          setOdulYukleniyor(false);
+        }
+      },
+    });
+    if (!gosterildi) {
+      setOdulMesaj('Reklam hazırlanıyor, birazdan tekrar dene.');
+    }
+  }, [odulMesajiGetir, odulReklamiGoster, odulYukleniyor, sunucudanGuncelle]);
 
   const ara = () => {
     const metin = girdi.trim();
     if (!metin) return;
-    if (limitAsildi) return;
+    if (limitAsildi) {
+      reklamIzle();
+      return;
+    }
     navigation.navigate('Kartlar', { konu: metin, mod: aktifMod });
     setGirdi('');
   };
@@ -81,7 +118,31 @@ export default function HomeScreen({ navigation }) {
           <Text style={s.limitUyari}>Günlük limitine yaklaşıyorsun — {kalan} istek kaldı.</Text>
         )}
         {limitAsildi && (
-          <Text style={s.limitHata}>Günlük limitin doldu. Yarın tekrar gel.</Text>
+          <View style={s.limitKutusu}>
+            <Text style={s.limitHata}>
+              Devam etmek için kısa bir reklam izleyebilirsin.
+            </Text>
+            <TouchableOpacity
+              style={[
+                s.limitBtn,
+                (!odulReklamiHazir || odulYukleniyor) && s.limitBtnPasif,
+              ]}
+              onPress={reklamIzle}
+              disabled={!odulReklamiHazir || odulYukleniyor}
+            >
+              <Text style={s.limitBtnTxt}>
+                {odulYukleniyor
+                  ? 'Ödül alınıyor...'
+                  : odulReklamiHazir
+                    ? 'Reklamı İzle'
+                    : 'Reklam Hazırlanıyor...'}
+              </Text>
+            </TouchableOpacity>
+            {!odulReklamiHazir && !odulMesaj && (
+              <Text style={s.limitAlt}>Reklam hazır olunca tekrar dene.</Text>
+            )}
+            {!!odulMesaj && <Text style={s.limitAlt}>{odulMesaj}</Text>}
+          </View>
         )}
       </View>
     </SafeAreaView>
@@ -196,10 +257,37 @@ const s = StyleSheet.create({
     textAlign: 'center',
     marginTop: 4,
   },
+  limitKutusu: {
+    backgroundColor: tema.bgSecondary,
+    borderWidth: 1,
+    borderColor: tema.cardBorder,
+    borderRadius: tema.radius,
+    padding: 12,
+    gap: 8,
+    marginTop: 4,
+  },
   limitHata: {
-    color: tema.danger,
+    color: tema.text,
     fontSize: 12,
     textAlign: 'center',
-    marginTop: 4,
+  },
+  limitBtn: {
+    backgroundColor: tema.accent,
+    paddingVertical: 10,
+    borderRadius: tema.radius,
+    alignItems: 'center',
+  },
+  limitBtnPasif: {
+    opacity: 0.6,
+  },
+  limitBtnTxt: {
+    color: tema.bg,
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  limitAlt: {
+    color: tema.textSecondary,
+    fontSize: 11,
+    textAlign: 'center',
   },
 });

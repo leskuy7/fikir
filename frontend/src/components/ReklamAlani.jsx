@@ -31,6 +31,21 @@ export default function ReklamAlani({ slot, slotId, format, style = {} }) {
 
   useEffect(() => {
     if (AD_PROVIDER !== 'adsense') return;
+    if (!ADSENSE_PUBLISHER_ID || typeof document === 'undefined') return;
+
+    const mevcutScript = document.querySelector('script[data-adsense-script="true"]');
+    if (mevcutScript) return;
+
+    const script = document.createElement('script');
+    script.src = `https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${ADSENSE_PUBLISHER_ID}`;
+    script.async = true;
+    script.crossOrigin = 'anonymous';
+    script.setAttribute('data-adsense-script', 'true');
+    document.head.appendChild(script);
+  }, []);
+
+  useEffect(() => {
+    if (AD_PROVIDER !== 'adsense') return;
     if (!ADSENSE_PUBLISHER_ID || !resolvedSlotId) return;
     try {
       (window.adsbygoogle = window.adsbygoogle || []).push({});

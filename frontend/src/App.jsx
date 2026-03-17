@@ -112,11 +112,6 @@ function AnaSayfa({ tema, temaSecimi }) {
         />
       </div>
 
-      {/* Footer üstü reklam */}
-      <div className="reklam-footer">
-        <ReklamAlani slot="banner" />
-      </div>
-
       <footer className="app__footer">
         <span className="app__footer-marka">Fikir Kutusu</span>
         <span className="app__footer-sep">·</span>

@@ -9,6 +9,7 @@ import {
   limitDurumGetir,
   limitIadeEt,
   LimitServisiHatasi,
+  reklamOdulHakkiKullan,
 } from './middleware/rateLimiter.js';
 
 let firebaseAdminHazir = false;
@@ -67,6 +68,11 @@ const IZNLI_ORIGINLER = new Set(
   (process.env.CORS_ORIGINS || 'https://fikir-nine.vercel.app')
     .split(',').map((o) => o.trim()).filter(Boolean)
 );
+const REKLAM_ODUL_SECRET = process.env.REKLAM_ODUL_SECRET || crypto.randomBytes(32).toString('hex');
+const REKLAM_ODUL_OTURUM_TTL_MS = parseInt(process.env.REKLAM_ODUL_OTURUM_TTL_MS, 10) || 10 * 60 * 1000;
+const REKLAM_ODUL_MIN_BEKLEME_MS = parseInt(process.env.REKLAM_ODUL_MIN_BEKLEME_MS, 10) || 8000;
+const reklamOdulOturumlari = new Map();
+const reklamOdulAnahtarlari = new Map();
 
 function geminiJsonSchema(mod) {
   if (!JSON_KART_MODLARI.has(mod)) return null;
@@ -319,6 +325,78 @@ function limitHeaderYaz(res, limitDurum) {
   res.setHeader('x-limit-used', String(limitDurum.kullanilan));
 }
 
+function reklamOdulImzasiUret({ oturumId, limitAnahtari, olusturulma, sonKullanma }) {
+  return crypto
+    .createHmac('sha256', REKLAM_ODUL_SECRET)
+    .update(`${oturumId}.${limitAnahtari}.${olusturulma}.${sonKullanma}`)
+    .digest('hex');
+}
+
+function guvenliKarsilastir(a, b) {
+  const sol = Buffer.from(String(a || ''), 'utf8');
+  const sag = Buffer.from(String(b || ''), 'utf8');
+  if (sol.length !== sag.length) return false;
+  return crypto.timingSafeEqual(sol, sag);
+}
+
+function reklamOdulOturumuSil(oturum) {
+  if (!oturum) return;
+  reklamOdulOturumlari.delete(oturum.oturumId);
+  if (reklamOdulAnahtarlari.get(oturum.limitAnahtari) === oturum.oturumId) {
+    reklamOdulAnahtarlari.delete(oturum.limitAnahtari);
+  }
+}
+
+function reklamOdulOturumuOlustur(limitAnahtari) {
+  const oncekiOturumId = reklamOdulAnahtarlari.get(limitAnahtari);
+  if (oncekiOturumId) {
+    reklamOdulOturumuSil(reklamOdulOturumlari.get(oncekiOturumId));
+  }
+
+  const oturumId = crypto.randomUUID();
+  const olusturulma = Date.now();
+  const sonKullanma = olusturulma + REKLAM_ODUL_OTURUM_TTL_MS;
+  const oturum = {
+    oturumId,
+    limitAnahtari,
+    olusturulma,
+    sonKullanma,
+  };
+  oturum.imza = reklamOdulImzasiUret(oturum);
+
+  reklamOdulOturumlari.set(oturumId, oturum);
+  reklamOdulAnahtarlari.set(limitAnahtari, oturumId);
+  return oturum;
+}
+
+function reklamOdulOturumuDogrula({ oturumId, imza, limitAnahtari }) {
+  const oturum = reklamOdulOturumlari.get(oturumId);
+  if (!oturum) {
+    return { ok: false, kod: 'REKLAM_ODUL_DOGRULANAMADI', hata: 'Odul oturumu bulunamadi' };
+  }
+  if (Date.now() > oturum.sonKullanma) {
+    reklamOdulOturumuSil(oturum);
+    return { ok: false, kod: 'REKLAM_ODUL_DOGRULANAMADI', hata: 'Odul oturumu zaman asimina ugradi' };
+  }
+  if (oturum.limitAnahtari !== limitAnahtari) {
+    reklamOdulOturumuSil(oturum);
+    return { ok: false, kod: 'REKLAM_ODUL_DOGRULANAMADI', hata: 'Odul oturumu esitlenemedi' };
+  }
+
+  const beklenenImza = reklamOdulImzasiUret(oturum);
+  if (!guvenliKarsilastir(imza, beklenenImza)) {
+    reklamOdulOturumuSil(oturum);
+    return { ok: false, kod: 'REKLAM_ODUL_DOGRULANAMADI', hata: 'Odul oturumu imzasi gecersiz' };
+  }
+
+  const gecenSure = Date.now() - oturum.olusturulma;
+  if (gecenSure < REKLAM_ODUL_MIN_BEKLEME_MS) {
+    return { ok: false, kod: 'REKLAM_ODUL_BEKLENIYOR', hata: 'Reklam odulu henuz dogrulanamadi' };
+  }
+
+  return { ok: true, oturum };
+}
+
 app.use(
   cors({
     origin(origin, callback) {
@@ -370,6 +448,13 @@ setInterval(() => {
   }
 }, 60 * 1000);
 
+setInterval(() => {
+  const simdi = Date.now();
+  for (const oturum of reklamOdulOturumlari.values()) {
+    if (simdi > oturum.sonKullanma) reklamOdulOturumuSil(oturum);
+  }
+}, 60 * 1000);
+
 app.get('/api/limit-durum', async (req, res) => {
   const authHeader = req.headers.authorization || '';
   const idToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : null;
@@ -394,6 +479,135 @@ app.get('/api/limit-durum', async (req, res) => {
     }
     throw err;
   }
+});
+
+app.post('/api/reklam-odul/oturum', async (req, res) => {
+  const authHeader = req.headers.authorization || '';
+  const rawToken = authHeader.startsWith('Bearer ')
+    ? authHeader.slice(7).trim()
+    : null;
+  const idToken = rawToken || null;
+
+  let dogrulanmisUid = null;
+  if (idToken) {
+    if (!firebaseAdminHazir) {
+      return apiHata(res, 503, 'LIMIT_SERVISI_KULLANILAMIYOR', 'Auth servisi yapilandirilmamis, lutfen daha sonra tekrar dene');
+    }
+    dogrulanmisUid = await tokenDogrula(idToken);
+    if (!dogrulanmisUid) {
+      return apiHata(res, 401, 'GIRIS_GEREKLI', 'Gecersiz oturum tokeni');
+    }
+  }
+
+  const limitAnahtari = dogrulanmisUid
+    ? `uid:${dogrulanmisUid}`
+    : req.ip || 'anon';
+
+  let limitDurum;
+  try {
+    limitDurum = await limitDurumGetir(limitAnahtari);
+  } catch (err) {
+    if (err instanceof LimitServisiHatasi) {
+      return apiHata(res, 503, 'LIMIT_SERVISI_KULLANILAMIYOR', 'Limit servisi gecici olarak kullanilamiyor', { retry: false });
+    }
+    throw err;
+  }
+
+  limitHeaderYaz(res, limitDurum);
+  if (!limitDurum.limitAsildi) {
+    return apiHata(res, 409, 'REKLAM_ODUL_GEREKSIZ', 'Su an reklam odulu gerekmiyor', {
+      retry: false,
+    });
+  }
+
+  const oturum = reklamOdulOturumuOlustur(limitAnahtari);
+  return apiBasari(res, {
+    oturum: {
+      id: oturum.oturumId,
+      imza: oturum.imza,
+      sonKullanma: oturum.sonKullanma,
+      minBeklemeMs: REKLAM_ODUL_MIN_BEKLEME_MS,
+    },
+  });
+});
+
+app.post('/api/reklam-odul', async (req, res) => {
+  const { oturumId, imza } = req.body || {};
+  if (
+    typeof oturumId !== 'string'
+    || typeof imza !== 'string'
+    || !/^[a-f0-9-]{36}$/i.test(oturumId)
+    || !/^[a-f0-9]{64}$/i.test(imza)
+  ) {
+    return apiHata(res, 400, 'ISTEK_HATASI', 'Odul dogrulamasi icin gecerli oturum gerekli');
+  }
+
+  const authHeader = req.headers.authorization || '';
+  const rawToken = authHeader.startsWith('Bearer ')
+    ? authHeader.slice(7).trim()
+    : null;
+  const idToken = rawToken || null;
+
+  let dogrulanmisUid = null;
+  if (idToken) {
+    if (!firebaseAdminHazir) {
+      return apiHata(res, 503, 'LIMIT_SERVISI_KULLANILAMIYOR', 'Auth servisi yapilandirilmamis, lutfen daha sonra tekrar dene');
+    }
+    dogrulanmisUid = await tokenDogrula(idToken);
+    if (!dogrulanmisUid) {
+      return apiHata(res, 401, 'GIRIS_GEREKLI', 'Gecersiz oturum tokeni');
+    }
+  }
+
+  const limitAnahtari = dogrulanmisUid
+    ? `uid:${dogrulanmisUid}`
+    : req.ip || 'anon';
+
+  const dogrulama = reklamOdulOturumuDogrula({ oturumId, imza, limitAnahtari });
+  if (!dogrulama.ok) {
+    return apiHata(res, dogrulama.kod === 'REKLAM_ODUL_BEKLENIYOR' ? 409 : 403, dogrulama.kod, dogrulama.hata, {
+      retry: false,
+    });
+  }
+
+  let limitDurum;
+  try {
+    limitDurum = await limitDurumGetir(limitAnahtari);
+  } catch (err) {
+    if (err instanceof LimitServisiHatasi) {
+      return apiHata(res, 503, 'LIMIT_SERVISI_KULLANILAMIYOR', 'Limit servisi gecici olarak kullanilamiyor', { retry: false });
+    }
+    throw err;
+  }
+
+  limitHeaderYaz(res, limitDurum);
+  if (!limitDurum.limitAsildi) {
+    reklamOdulOturumuSil(dogrulama.oturum);
+    return apiHata(res, 409, 'REKLAM_ODUL_GEREKSIZ', 'Su an reklam odulu gerekmiyor', {
+      retry: false,
+    });
+  }
+
+  const odulDurum = await reklamOdulHakkiKullan(limitAnahtari);
+  if (!odulDurum.uygun) {
+    reklamOdulOturumuSil(dogrulama.oturum);
+    return apiHata(res, 429, 'ODUL_LIMIT_DOLDU', 'Gunluk reklam odul hakkin doldu', {
+      retry: false,
+      odul: odulDurum,
+    });
+  }
+
+  reklamOdulOturumuSil(dogrulama.oturum);
+  const limitDurum = await limitIadeEt(limitAnahtari);
+  limitHeaderYaz(res, limitDurum);
+  return apiBasari(res, {
+    limit: {
+      toplam: limitDurum.limit,
+      kalan: limitDurum.kalan,
+      kullanilan: limitDurum.kullanilan,
+    },
+    odul: odulDurum,
+  });
 });
 
 app.post('/api/mesaj', async (req, res) => {

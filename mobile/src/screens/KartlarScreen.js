@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -11,7 +11,9 @@ import {
 import { useKartlar } from '../hooks/useKartlar';
 import { useLimitContext } from '../context/LimitContext';
 import { useInterstitial } from '../hooks/useInterstitial';
+import { useRewardedAd } from '../hooks/useRewardedAd';
 import ReklamBanner from '../components/ReklamBanner';
+import { reklamOdulAl } from '../services/api';
 import { tema } from '../theme';
 
 const EMOJILER_BILGI = ['💡', '🔭', '⚡', '🧩', '🔄', '🌍'];
@@ -21,14 +23,60 @@ export default function KartlarScreen({ route, navigation }) {
   const { konu, mod } = route.params;
   const { limitDoldu, sunucudanGuncelle } = useLimitContext();
   const { goster: interstitialGoster } = useInterstitial();
-  const { kartlar, yukleniyor, hata, kartlariGetir } = useKartlar(mod, null, {
+  const { goster: odulReklamiGoster, hazir: odulReklamiHazir } = useRewardedAd();
+  const { kartlar, yukleniyor, hata, kartlariGetir, limitHatasi } = useKartlar(mod, null, {
     onLimitDoldu: limitDoldu,
     onLimitGuncelle: sunucudanGuncelle,
   });
+  const [odulYukleniyor, setOdulYukleniyor] = useState(false);
+  const [odulMesaj, setOdulMesaj] = useState('');
+  const autoDenendiRef = useRef(false);
 
   useEffect(() => {
     kartlariGetir(konu);
   }, [konu, kartlariGetir]);
+
+  const odulMesajiGetir = useCallback((kod) => {
+    if (kod === 'ODUL_LIMIT_DOLDU') return 'Günlük reklam ödül hakkın doldu.';
+    if (kod === 'LIMIT_SERVISI_KULLANILAMIYOR') return 'Limit servisi geçici olarak kullanılamıyor.';
+    if (kod === 'BACKEND_URL_YOK') return 'Sunucu adresi bulunamadı.';
+    return 'Reklam ödülü alınamadı. Birazdan tekrar dene.';
+  }, []);
+
+  const reklamIzle = useCallback(() => {
+    if (odulYukleniyor) return false;
+    setOdulMesaj('');
+    const gosterildi = odulReklamiGoster({
+      onReward: async () => {
+        setOdulYukleniyor(true);
+        try {
+          const { limit } = await reklamOdulAl();
+          sunucudanGuncelle(limit);
+          setOdulMesaj('');
+          kartlariGetir(konu);
+        } catch (err) {
+          setOdulMesaj(odulMesajiGetir(err.message));
+        } finally {
+          setOdulYukleniyor(false);
+        }
+      },
+    });
+    if (!gosterildi) {
+      setOdulMesaj('Reklam hazırlanıyor, birazdan tekrar dene.');
+    }
+    return gosterildi;
+  }, [kartlariGetir, konu, odulMesajiGetir, odulReklamiGoster, odulYukleniyor, sunucudanGuncelle]);
+
+  useEffect(() => {
+    if (limitHatasi) {
+      if (!autoDenendiRef.current) {
+        autoDenendiRef.current = true;
+        reklamIzle();
+      }
+    } else {
+      autoDenendiRef.current = false;
+    }
+  }, [limitHatasi, reklamIzle]);
 
   const emojiler = mod === 'bilgi' ? EMOJILER_BILGI : EMOJILER_FIKIR;
 
@@ -72,6 +120,32 @@ export default function KartlarScreen({ route, navigation }) {
           color={tema.accent}
           style={{ marginTop: 22 }}
         />
+      )}
+
+      {limitHatasi && (
+        <View style={s.limitKutusu}>
+          <Text style={s.limitBaslik}>Devam etmek için kısa bir reklam izle.</Text>
+          <TouchableOpacity
+            style={[
+              s.limitBtn,
+              (!odulReklamiHazir || odulYukleniyor) && s.limitBtnPasif,
+            ]}
+            onPress={reklamIzle}
+            disabled={!odulReklamiHazir || odulYukleniyor}
+          >
+            <Text style={s.limitBtnTxt}>
+              {odulYukleniyor
+                ? 'Ödül alınıyor...'
+                : odulReklamiHazir
+                  ? 'Reklamı İzle'
+                  : 'Reklam Hazırlanıyor...'}
+            </Text>
+          </TouchableOpacity>
+          {!odulReklamiHazir && !odulMesaj && (
+            <Text style={s.limitAlt}>Reklam hazır olunca tekrar dene.</Text>
+          )}
+          {!!odulMesaj && <Text style={s.limitAlt}>{odulMesaj}</Text>}
+        </View>
       )}
 
       {hata && <Text style={s.hata}>{hata}</Text>}
@@ -129,6 +203,41 @@ const s = StyleSheet.create({
     textAlign: 'center',
     marginTop: 16,
     fontSize: 14,
+  },
+  limitKutusu: {
+    marginHorizontal: 12,
+    marginTop: 14,
+    backgroundColor: tema.bgSecondary,
+    borderWidth: 1,
+    borderColor: tema.cardBorder,
+    borderRadius: tema.radius,
+    padding: 12,
+    gap: 8,
+  },
+  limitBaslik: {
+    color: tema.text,
+    fontSize: 13,
+    textAlign: 'center',
+    fontWeight: '600',
+  },
+  limitBtn: {
+    backgroundColor: tema.accent,
+    paddingVertical: 10,
+    borderRadius: tema.radius,
+    alignItems: 'center',
+  },
+  limitBtnPasif: {
+    opacity: 0.6,
+  },
+  limitBtnTxt: {
+    color: tema.bg,
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  limitAlt: {
+    color: tema.textSecondary,
+    fontSize: 11,
+    textAlign: 'center',
   },
   liste: { paddingHorizontal: 12, paddingBottom: 24, paddingTop: 6 },
   satir: { gap: 10, marginBottom: 10 },

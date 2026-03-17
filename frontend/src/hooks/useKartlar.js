@@ -167,8 +167,9 @@ export function useKartlar(
   const kartlariGetir = useCallback(
     async (yeniKonu) => {
       if (!yeniKonu?.trim()) return;
-      if (onLimitKontrol?.()) {
-        setHata('Günlük limitin doldu.');
+      const limitKontrolMesaji = onLimitKontrol?.();
+      if (limitKontrolMesaji) {
+        setHata(limitKontrolMesaji);
         return;
       }
       setHata(null);

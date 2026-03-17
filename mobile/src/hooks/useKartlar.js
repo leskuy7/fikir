@@ -135,11 +135,13 @@ export function useKartlar(mod, kullaniciId = null, { onLimitDoldu, onLimitGunce
   const [yukleniyor, setYukleniyor] = useState(false);
   const [detayYukleniyor, setDetayYukleniyor] = useState(false);
   const [hata, setHata] = useState(null);
+  const [limitHatasi, setLimitHatasi] = useState(false);
 
   const kartlariGetir = useCallback(
     async (yeniKonu) => {
       if (!yeniKonu?.trim()) return;
       setHata(null);
+      setLimitHatasi(false);
       setYukleniyor(true);
       setKonu(yeniKonu.trim());
       setKartlar([]);
@@ -181,7 +183,8 @@ export function useKartlar(mod, kullaniciId = null, { onLimitDoldu, onLimitGunce
         onLimitGuncelle?.(err?.limit || null);
         if (err.message === 'LIMIT_DOLDU') {
           onLimitDoldu?.();
-          setHata(hataMesajiniGetir(err.message, 'Gunluk limitin doldu.'));
+          setLimitHatasi(true);
+          setHata(null);
         } else {
           setHata(hataMesajiniGetir(err.message, 'Bir seyler ters gitti. Tekrar dene.'));
         }
@@ -199,6 +202,7 @@ export function useKartlar(mod, kullaniciId = null, { onLimitDoldu, onLimitGunce
       setIlgiliKartlar([]);
       setDetayYukleniyor(true);
       setHata(null);
+      setLimitHatasi(false);
 
       try {
         const detayMesaj = `${kart.baslik}\n\n${kart.kanca || ''}`;
@@ -245,14 +249,20 @@ export function useKartlar(mod, kullaniciId = null, { onLimitDoldu, onLimitGunce
 
         if (limitHatasi) {
           onLimitDoldu?.();
-          if (basariliSayi === 0) setHata(hataMesajiniGetir('LIMIT_DOLDU', 'Gunluk limitin doldu.'));
+          setLimitHatasi(true);
+          if (basariliSayi === 0) setHata(null);
         } else if (basariliSayi === 0) {
           setHata(hataMesajiniGetir(null, 'Detay yuklenemedi. Tekrar dene.'));
         }
       } catch (err) {
         onLimitGuncelle?.(err?.limit || null);
-        if (err.message === 'LIMIT_DOLDU') onLimitDoldu?.();
-        setHata(hataMesajiniGetir(err.message, 'Detay yuklenemedi. Tekrar dene.'));
+        if (err.message === 'LIMIT_DOLDU') {
+          onLimitDoldu?.();
+          setLimitHatasi(true);
+          setHata(null);
+        } else {
+          setHata(hataMesajiniGetir(err.message, 'Detay yuklenemedi. Tekrar dene.'));
+        }
       } finally {
         setDetayYukleniyor(false);
       }
@@ -269,6 +279,7 @@ export function useKartlar(mod, kullaniciId = null, { onLimitDoldu, onLimitGunce
     yukleniyor,
     detayYukleniyor,
     hata,
+    limitHatasi,
     kartlariGetir,
     detayAc,
     setAcikKart,

@@ -11,5 +11,6 @@ export function normalizeIcerik(metin) {
     .replace(/\u2014/g, ' - ')        // em dash
     .replace(/\u2026/g, '...')        // ellipsis
     .replace(/\u00A0/g, ' ')          // non-breaking space
-    .replace(/\uFF03|\uFE5F/g, '#');  // fullwidth/small # → düz #
+    .replace(/\uFF03|\uFE5F/g, '#')   // fullwidth/small # → düz #
+    .replace(/^\s*#{1,6}\s+/gm, '');  // Markdown başlıklarını düz metne çevir
 }

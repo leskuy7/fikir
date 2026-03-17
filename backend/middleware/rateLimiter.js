@@ -2,6 +2,9 @@ import Redis from 'ioredis';
 
 const MISAFIR_LIMIT = parseInt(process.env.MISAFIR_LIMIT, 10) || 5;
 const KAYITLI_LIMIT = parseInt(process.env.KAYITLI_LIMIT, 10) || 20;
+const REKLAM_ODUL_LIMIT = Number.isNaN(parseInt(process.env.REKLAM_ODUL_LIMIT, 10))
+  ? 3
+  : parseInt(process.env.REKLAM_ODUL_LIMIT, 10);
 
 export class LimitServisiHatasi extends Error {
   constructor(message = 'Limit servisine su an ulasilamiyor') {
@@ -45,12 +48,16 @@ if (process.env.REDIS_URL) {
 }
 
 const sayac = new Map();
+const odulSayac = new Map();
 const MAX_BELLEK_KAYIT = 100000;
 
 setInterval(() => {
   const simdi = Date.now();
   for (const [anahtar, kayit] of sayac.entries()) {
     if (simdi > kayit.sifirlanmaTarihi) sayac.delete(anahtar);
+  }
+  for (const [anahtar, kayit] of odulSayac.entries()) {
+    if (simdi > kayit.sifirlanmaTarihi) odulSayac.delete(anahtar);
   }
   if (!redisHazir && sayac.size > 0) {
     console.warn(`Redis devre disi — bellek limit sayaci aktif (${sayac.size} kayit)`);
@@ -161,4 +168,67 @@ export async function limitIadeEt(anahtar) {
   if (!kayit || simdi > kayit.sifirlanmaTarihi) return limitiHesapla(limit, 0);
   kayit.sayi = Math.max(0, kayit.sayi - 1);
   return limitiHesapla(limit, kayit.sayi);
+}
+
+export async function reklamOdulHakkiKullan(anahtar) {
+  const limit = REKLAM_ODUL_LIMIT;
+  if (!limit || limit <= 0) {
+    return { limit: 0, kullanilan: 0, kalan: 0, uygun: false };
+  }
+
+  if (redis && redisHazir) {
+    try {
+      const key = `reward:${anahtar}`;
+      const ttl = geceYarisiSaniye();
+      const script =
+        "local c = tonumber(redis.call('GET', KEYS[1]) or '0'); " +
+        "local lim = tonumber(ARGV[1]); " +
+        "if c >= lim then return -1 end; " +
+        "c = redis.call('INCR', KEYS[1]); " +
+        "if c == 1 then redis.call('EXPIRE', KEYS[1], ARGV[2]) end; " +
+        "return c";
+      const kullanilan = await redis.eval(script, 1, key, limit, ttl);
+      if (kullanilan === -1) {
+        return { limit, kullanilan: limit, kalan: 0, uygun: false };
+      }
+      return {
+        limit,
+        kullanilan,
+        kalan: Math.max(0, limit - kullanilan),
+        uygun: true,
+      };
+    } catch (err) {
+      console.warn('Redis reklam odul hatasi, bellege dusuluyor:', err.message);
+    }
+  }
+
+  const simdi = Date.now();
+  const geceyarisi = new Date();
+  geceyarisi.setDate(geceyarisi.getDate() + 1);
+  geceyarisi.setHours(0, 0, 0, 0);
+  const mevcutKayit = odulSayac.get(anahtar);
+
+  if (!mevcutKayit || simdi > mevcutKayit.sifirlanmaTarihi) {
+    if (odulSayac.size >= MAX_BELLEK_KAYIT) {
+      const ilkAnahtar = odulSayac.keys().next().value;
+      odulSayac.delete(ilkAnahtar);
+    }
+    odulSayac.set(anahtar, {
+      sayi: 1,
+      sifirlanmaTarihi: geceyarisi.getTime(),
+    });
+    return { limit, kullanilan: 1, kalan: Math.max(0, limit - 1), uygun: true };
+  }
+
+  if (mevcutKayit.sayi >= limit) {
+    return { limit, kullanilan: mevcutKayit.sayi, kalan: 0, uygun: false };
+  }
+
+  mevcutKayit.sayi += 1;
+  return {
+    limit,
+    kullanilan: mevcutKayit.sayi,
+    kalan: Math.max(0, limit - mevcutKayit.sayi),
+    uygun: true,
+  };
 }

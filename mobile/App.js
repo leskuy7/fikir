@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import mobileAds from 'react-native-google-mobile-ads';
 import { LimitProvider } from './src/context/LimitContext';
 import HomeScreen from './src/screens/HomeScreen';
 import KartlarScreen from './src/screens/KartlarScreen';
@@ -17,6 +18,10 @@ const screenOptions = {
 };
 
 export default function App() {
+  useEffect(() => {
+    mobileAds().initialize();
+  }, []);
+
   return (
     <LimitProvider>
       <NavigationContainer>

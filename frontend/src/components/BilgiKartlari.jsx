@@ -4,7 +4,6 @@ import YukleniyorSpinner from './YukleniyorSpinner.jsx';
 import KartDetay from './KartDetay.jsx';
 import IlgiliKartlar from './IlgiliKartlar.jsx';
 import KonuGirisi from './KonuGirisi.jsx';
-import ReklamAlani from './ReklamAlani.jsx';
 
 const KART_EMOJILERI = ['💡', '🔭', '⚡', '🧩', '🔄', '🌍', '🧬', '📖'];
 
@@ -34,7 +33,11 @@ export default function BilgiKartlari({ kullaniciId, limitBag = {}, gecmisIstek 
     onBasari: artir,
     onLimitDoldu: limitDoldu,
     onLimitGuncelle: sunucudanGuncelle,
-    onLimitKontrol: () => limitAsildi || !limitHazir,
+    onLimitKontrol: () => {
+      if (!limitHazir) return 'Limit bilgisi yukleniyor. Birazdan tekrar dene.';
+      if (limitAsildi) return 'Gunluk limitin doldu.';
+      return null;
+    },
   });
 
   const sonGonderimRef = useRef(0);
@@ -113,12 +116,6 @@ export default function BilgiKartlari({ kullaniciId, limitBag = {}, gecmisIstek 
                   <span className="kart-grid__kart-baslik">{kart.baslik}</span>
                   <span className="kart-grid__kart-icerik">{kart.kanca}</span>
                 </button>
-                {/* Her 3. karttan sonra reklam göster */}
-                {(i + 1) % 3 === 0 && (
-                  <div className="kart-grid__reklam">
-                    <ReklamAlani slot="kart" />
-                  </div>
-                )}
               </React.Fragment>
             ))}
           </div>
