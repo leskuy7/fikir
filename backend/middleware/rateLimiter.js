@@ -232,3 +232,42 @@ export async function reklamOdulHakkiKullan(anahtar) {
     uygun: true,
   };
 }
+
+export async function reklamOdulDurumGetir(anahtar) {
+  const limit = REKLAM_ODUL_LIMIT;
+  if (!limit || limit <= 0) {
+    return { limit: 0, kullanilan: 0, kalan: 0, uygun: false };
+  }
+
+  if (redis && redisHazir) {
+    try {
+      const sayi = await redis.get(`reward:${anahtar}`);
+      const kullanilan = sayi !== null ? parseInt(sayi, 10) : 0;
+      const guvenliKullanilan = Number.isNaN(kullanilan) ? 0 : Math.max(0, kullanilan);
+      return {
+        limit,
+        kullanilan: guvenliKullanilan,
+        kalan: Math.max(0, limit - guvenliKullanilan),
+        uygun: guvenliKullanilan < limit,
+      };
+    } catch (err) {
+      console.warn('Redis reklam odul durum hatasi, bellege dusuluyor:', err.message);
+    }
+  }
+
+  const simdi = Date.now();
+  const kayit = odulSayac.get(anahtar);
+  if (!kayit || simdi > kayit.sifirlanmaTarihi) {
+    if (kayit && simdi > kayit.sifirlanmaTarihi) {
+      odulSayac.delete(anahtar);
+    }
+    return { limit, kullanilan: 0, kalan: limit, uygun: true };
+  }
+
+  return {
+    limit,
+    kullanilan: kayit.sayi,
+    kalan: Math.max(0, limit - kayit.sayi),
+    uygun: kayit.sayi < limit,
+  };
+}

@@ -14,6 +14,8 @@ export function useRewardedAd() {
   const adRef = useRef(null);
   const [hazir, setHazir] = useState(false);
   const onRewardRef = useRef(null);
+  const onClosedRef = useRef(null);
+  const onErrorRef = useRef(null);
   const odulKazanildiRef = useRef(false);
 
   useEffect(() => {
@@ -40,14 +42,22 @@ export function useRewardedAd() {
     );
     const unsubClosed = ad.addAdEventListener(AdEventType.CLOSED, () => {
       const cb = onRewardRef.current;
+      const onClosed = onClosedRef.current;
       const odulKazanildi = odulKazanildiRef.current;
       onRewardRef.current = null;
+      onClosedRef.current = null;
+      onErrorRef.current = null;
       tekrarYukle();
       if (odulKazanildi && typeof cb === 'function') cb();
+      if (typeof onClosed === 'function') onClosed({ rewarded: odulKazanildi });
     });
     const unsubError = ad.addAdEventListener(AdEventType.ERROR, () => {
       onRewardRef.current = null;
+      const onError = onErrorRef.current;
+      onClosedRef.current = null;
+      onErrorRef.current = null;
       tekrarYukle();
+      if (typeof onError === 'function') onError();
     });
 
     ad.load();
@@ -62,14 +72,20 @@ export function useRewardedAd() {
 
   const goster = useCallback((opts = {}) => {
     const onReward = typeof opts?.onReward === 'function' ? opts.onReward : null;
+    const onClosed = typeof opts?.onClosed === 'function' ? opts.onClosed : null;
+    const onError = typeof opts?.onError === 'function' ? opts.onError : null;
     if (adRef.current && hazir) {
       odulKazanildiRef.current = false;
       onRewardRef.current = onReward;
+      onClosedRef.current = onClosed;
+      onErrorRef.current = onError;
       adRef.current.show();
       return true;
     }
     odulKazanildiRef.current = false;
     onRewardRef.current = null;
+    onClosedRef.current = null;
+    onErrorRef.current = null;
     return false;
   }, [hazir]);
 

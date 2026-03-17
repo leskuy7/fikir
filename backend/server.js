@@ -9,6 +9,7 @@ import {
   limitDurumGetir,
   limitIadeEt,
   LimitServisiHatasi,
+  reklamOdulDurumGetir,
   reklamOdulHakkiKullan,
 } from './middleware/rateLimiter.js';
 
@@ -520,6 +521,14 @@ app.post('/api/reklam-odul/oturum', async (req, res) => {
     });
   }
 
+  const odulDurum = await reklamOdulDurumGetir(limitAnahtari);
+  if (!odulDurum.uygun) {
+    return apiHata(res, 429, 'ODUL_LIMIT_DOLDU', 'Gunluk reklam odul hakkin doldu', {
+      retry: false,
+      odul: odulDurum,
+    });
+  }
+
   const oturum = reklamOdulOturumuOlustur(limitAnahtari);
   return apiBasari(res, {
     oturum: {
@@ -598,13 +607,13 @@ app.post('/api/reklam-odul', async (req, res) => {
   }
 
   reklamOdulOturumuSil(dogrulama.oturum);
-  const limitDurum = await limitIadeEt(limitAnahtari);
-  limitHeaderYaz(res, limitDurum);
+  const guncelLimitDurum = await limitIadeEt(limitAnahtari);
+  limitHeaderYaz(res, guncelLimitDurum);
   return apiBasari(res, {
     limit: {
-      toplam: limitDurum.limit,
-      kalan: limitDurum.kalan,
-      kullanilan: limitDurum.kullanilan,
+      toplam: guncelLimitDurum.limit,
+      kalan: guncelLimitDurum.kalan,
+      kullanilan: guncelLimitDurum.kullanilan,
     },
     odul: odulDurum,
   });

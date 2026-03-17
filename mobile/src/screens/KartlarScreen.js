@@ -13,7 +13,7 @@ import { useLimitContext } from '../context/LimitContext';
 import { useInterstitial } from '../hooks/useInterstitial';
 import { useRewardedAd } from '../hooks/useRewardedAd';
 import ReklamBanner from '../components/ReklamBanner';
-import { reklamOdulAl } from '../services/api';
+import { reklamOdulAl, reklamOdulOturumuBaslat } from '../services/api';
 import { tema } from '../theme';
 
 const EMOJILER_BILGI = ['💡', '🔭', '⚡', '🧩', '🔄', '🌍'];
@@ -38,19 +38,45 @@ export default function KartlarScreen({ route, navigation }) {
 
   const odulMesajiGetir = useCallback((kod) => {
     if (kod === 'ODUL_LIMIT_DOLDU') return 'Günlük reklam ödül hakkın doldu.';
+    if (kod === 'REKLAM_ODUL_GEREKSIZ') return 'Şu an reklam ödülü gerekmiyor.';
+    if (kod === 'REKLAM_ODUL_DOGRULANAMADI') return 'Reklam doğrulanamadı. Tekrar dene.';
+    if (kod === 'REKLAM_ODUL_BEKLENIYOR') return 'Reklam doğrulaması tamamlanmadı. Tekrar dene.';
     if (kod === 'LIMIT_SERVISI_KULLANILAMIYOR') return 'Limit servisi geçici olarak kullanılamıyor.';
+    if (kod === 'ISTEK_HATASI') return 'Ödül isteği başlatılamadı. Tekrar dene.';
     if (kod === 'BACKEND_URL_YOK') return 'Sunucu adresi bulunamadı.';
     return 'Reklam ödülü alınamadı. Birazdan tekrar dene.';
   }, []);
 
-  const reklamIzle = useCallback(() => {
+  const reklamIzle = useCallback(async () => {
     if (odulYukleniyor) return false;
+    if (!odulReklamiHazir) {
+      setOdulMesaj('Reklam hazırlanıyor, birazdan tekrar dene.');
+      return false;
+    }
+
+    setOdulYukleniyor(true);
     setOdulMesaj('');
+    let odulOturumu;
+    try {
+      const { oturum, limit } = await reklamOdulOturumuBaslat();
+      sunucudanGuncelle(limit || null);
+      if (!oturum?.id || !oturum?.imza) {
+        throw new Error('REKLAM_ODUL_DOGRULANAMADI');
+      }
+      odulOturumu = oturum;
+    } catch (err) {
+      setOdulMesaj(odulMesajiGetir(err.message));
+      setOdulYukleniyor(false);
+      return false;
+    }
+
     const gosterildi = odulReklamiGoster({
       onReward: async () => {
-        setOdulYukleniyor(true);
         try {
-          const { limit } = await reklamOdulAl();
+          const { limit } = await reklamOdulAl({
+            oturumId: odulOturumu.id,
+            imza: odulOturumu.imza,
+          });
           sunucudanGuncelle(limit);
           setOdulMesaj('');
           kartlariGetir(konu);
@@ -60,18 +86,29 @@ export default function KartlarScreen({ route, navigation }) {
           setOdulYukleniyor(false);
         }
       },
+      onClosed: ({ rewarded }) => {
+        if (!rewarded) {
+          setOdulYukleniyor(false);
+          setOdulMesaj('Reklam tamamlanmadı, yeni hak açılmadı.');
+        }
+      },
+      onError: () => {
+        setOdulYukleniyor(false);
+        setOdulMesaj('Reklam açılırken bir sorun oldu. Tekrar dene.');
+      },
     });
     if (!gosterildi) {
       setOdulMesaj('Reklam hazırlanıyor, birazdan tekrar dene.');
+      setOdulYukleniyor(false);
     }
     return gosterildi;
-  }, [kartlariGetir, konu, odulMesajiGetir, odulReklamiGoster, odulYukleniyor, sunucudanGuncelle]);
+  }, [kartlariGetir, konu, odulMesajiGetir, odulReklamiGoster, odulReklamiHazir, odulYukleniyor, sunucudanGuncelle]);
 
   useEffect(() => {
     if (limitHatasi) {
       if (!autoDenendiRef.current) {
         autoDenendiRef.current = true;
-        reklamIzle();
+        void reklamIzle();
       }
     } else {
       autoDenendiRef.current = false;

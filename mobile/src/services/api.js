@@ -55,6 +55,26 @@ async function getIdToken(forceRefresh = false) {
   }
 }
 
+async function yetkiliIstekAt(path, { method = 'GET', body } = {}, forceRefresh = false) {
+  const idToken = await getIdToken(forceRefresh);
+  const headers = { 'Content-Type': 'application/json' };
+  if (idToken) headers.Authorization = `Bearer ${idToken}`;
+
+  return fetch(`${BACKEND_URL}${path}`, {
+    method,
+    headers,
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+  });
+}
+
+async function istekGonder(path, options = {}) {
+  let response = await yetkiliIstekAt(path, options, false);
+  if (response.status === 401) {
+    response = await yetkiliIstekAt(path, options, true);
+  }
+  return response;
+}
+
 export async function mesajGonder({ mesajlar, mod, kullaniciId = null, aramOturumId = null }) {
   if (!BACKEND_URL) {
     throw hataUret('BACKEND_URL_YOK');
@@ -93,26 +113,45 @@ export async function mesajGonder({ mesajlar, mod, kullaniciId = null, aramOturu
   };
 }
 
-export async function reklamOdulAl() {
+export async function reklamOdulOturumuBaslat() {
   if (!BACKEND_URL) {
     throw hataUret('BACKEND_URL_YOK');
   }
 
-  const istegiGonder = async (forceRefresh = false) => {
-    const idToken = await getIdToken(forceRefresh);
-    const headers = { 'Content-Type': 'application/json' };
-    if (idToken) headers.Authorization = `Bearer ${idToken}`;
-    return fetch(`${BACKEND_URL}/api/reklam-odul`, {
-      method: 'POST',
-      headers,
-    });
-  };
+  const response = await istekGonder('/api/reklam-odul/oturum', {
+    method: 'POST',
+  });
+  const limit = parseLimit(response.headers);
+  const body = await cevapJsonOku(response);
 
-  let response = await istegiGonder(false);
-  if (response.status === 401) {
-    response = await istegiGonder(true);
+  if (!response.ok) {
+    const kod = hataKoduMaple(response, body);
+    throw hataUret(kod, response.status, { limit, body });
   }
 
+  return {
+    limit,
+    oturum: body?.oturum || null,
+  };
+}
+
+export async function reklamOdulAl({ oturumId, imza } = {}) {
+  if (!BACKEND_URL) {
+    throw hataUret('BACKEND_URL_YOK');
+  }
+  if (
+    typeof oturumId !== 'string'
+    || typeof imza !== 'string'
+    || !oturumId
+    || !imza
+  ) {
+    throw hataUret('ISTEK_HATASI');
+  }
+
+  const response = await istekGonder('/api/reklam-odul', {
+    method: 'POST',
+    body: { oturumId, imza },
+  });
   const limit = parseLimit(response.headers);
   const body = await cevapJsonOku(response);
 
