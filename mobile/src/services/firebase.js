@@ -1,5 +1,11 @@
-import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getApp, getApps, initializeApp } from 'firebase/app';
+import {
+  GoogleAuthProvider,
+  getAuth,
+  getReactNativePersistence,
+  initializeAuth,
+} from 'firebase/auth';
 
 const firebaseConfig = {
   apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
@@ -7,15 +13,21 @@ const firebaseConfig = {
   projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
 };
 
-let auth;
-try {
-  if (firebaseConfig.projectId && firebaseConfig.apiKey) {
-    const app = initializeApp(firebaseConfig);
+export const firebaseHazir = Boolean(firebaseConfig.projectId && firebaseConfig.apiKey);
+
+const app = firebaseHazir
+  ? (getApps().length > 0 ? getApp() : initializeApp(firebaseConfig))
+  : null;
+
+let auth = null;
+if (app) {
+  try {
+    auth = initializeAuth(app, {
+      persistence: getReactNativePersistence(AsyncStorage),
+    });
+  } catch {
     auth = getAuth(app);
-  } else {
-    auth = { currentUser: null };
   }
-} catch (_err) {
-  auth = { currentUser: null };
 }
-export { auth };
+
+export { app, auth, GoogleAuthProvider };

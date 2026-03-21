@@ -12,12 +12,17 @@ export default function PaylasimSayfasi() {
   const [bulunamadi, setBulunamadi] = useState(false);
 
   useEffect(() => {
+    let iptal = false;
     if (!cacheId) {
       setBulunamadi(true);
       setYukleniyor(false);
       return;
     }
+    setYukleniyor(true);
+    setBulunamadi(false);
+    setVeri(null);
     detayGetirById(cacheId).then((sonuc) => {
+      if (iptal) return;
       if (sonuc) {
         setVeri(sonuc);
       } else {
@@ -25,6 +30,7 @@ export default function PaylasimSayfasi() {
       }
       setYukleniyor(false);
     });
+    return () => { iptal = true; };
   }, [cacheId]);
 
   if (yukleniyor) {

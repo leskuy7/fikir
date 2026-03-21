@@ -6,7 +6,9 @@ import {
   TouchableOpacity,
   StyleSheet,
   SafeAreaView,
+  Image,
 } from 'react-native';
+import { useAuthContext } from '../context/AuthContext';
 import { useLimitContext } from '../context/LimitContext';
 import { useRewardedAd } from '../hooks/useRewardedAd';
 import { reklamOdulAl, reklamOdulOturumuBaslat } from '../services/api';
@@ -20,6 +22,7 @@ const MODLAR = [
 export default function HomeScreen({ navigation }) {
   const [girdi, setGirdi] = useState('');
   const [aktifMod, setAktifMod] = useState('bilgi');
+  const { kullanici, cikisYap, islemde: authIslemde } = useAuthContext();
   const { kalan, uyari, limitAsildi, sunucudanGuncelle } = useLimitContext();
   const { goster: odulReklamiGoster, hazir: odulReklamiHazir } = useRewardedAd();
   const [odulYukleniyor, setOdulYukleniyor] = useState(false);
@@ -107,6 +110,33 @@ export default function HomeScreen({ navigation }) {
       <View style={s.arkaDaire1} />
       <View style={s.arkaDaire2} />
 
+      <View style={s.userBar}>
+        <View style={s.userInfo}>
+          {kullanici?.photoURL ? (
+            <Image source={{ uri: kullanici.photoURL }} style={s.avatar} />
+          ) : (
+            <View style={s.avatarPlaceholder}>
+              <Text style={s.avatarText}>
+                {(kullanici?.displayName || kullanici?.email || 'K').slice(0, 1).toUpperCase()}
+              </Text>
+            </View>
+          )}
+          <View style={s.userTextWrap}>
+            <Text style={s.userLabel}>Google oturumu</Text>
+            <Text style={s.userName}>
+              {kullanici?.displayName || kullanici?.email || 'Kullanici'}
+            </Text>
+          </View>
+        </View>
+        <TouchableOpacity
+          style={[s.exitBtn, authIslemde && s.exitBtnDisabled]}
+          onPress={() => void cikisYap()}
+          disabled={authIslemde}
+        >
+          <Text style={s.exitBtnText}>{authIslemde ? 'Bekle...' : 'Cikis'}</Text>
+        </TouchableOpacity>
+      </View>
+
       <View style={s.hero}>
         <View style={s.logoBadge}>
           <Text style={s.logo}>✨</Text>
@@ -193,6 +223,71 @@ const s = StyleSheet.create({
     paddingHorizontal: 20,
     justifyContent: 'center',
     overflow: 'hidden',
+  },
+  userBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 18,
+    gap: 12,
+  },
+  userInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  avatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    borderWidth: 1,
+    borderColor: tema.cardBorderStrong,
+  },
+  avatarPlaceholder: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: tema.cardBg,
+    borderWidth: 1,
+    borderColor: tema.cardBorderStrong,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: {
+    color: tema.text,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  userTextWrap: {
+    flex: 1,
+  },
+  userLabel: {
+    color: tema.textSecondary,
+    fontSize: 11,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  userName: {
+    color: tema.text,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  exitBtn: {
+    backgroundColor: tema.bgSecondary,
+    borderWidth: 1,
+    borderColor: tema.cardBorder,
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  exitBtnDisabled: {
+    opacity: 0.65,
+  },
+  exitBtnText: {
+    color: tema.text,
+    fontSize: 12,
+    fontWeight: '700',
   },
   arkaDaire1: {
     position: 'absolute',

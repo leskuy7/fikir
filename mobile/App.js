@@ -3,6 +3,8 @@ import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import mobileAds from 'react-native-google-mobile-ads';
+import AuthGate from './src/components/AuthGate';
+import { AuthProvider } from './src/context/AuthContext';
 import { LimitProvider } from './src/context/LimitContext';
 import HomeScreen from './src/screens/HomeScreen';
 import KartlarScreen from './src/screens/KartlarScreen';
@@ -23,31 +25,35 @@ export default function App() {
   }, []);
 
   return (
-    <LimitProvider>
-      <NavigationContainer>
-        <StatusBar style="light" />
-        <Stack.Navigator screenOptions={screenOptions}>
-          <Stack.Screen
-            name="Home"
-            component={HomeScreen}
-            options={{ headerShown: false }}
-          />
-          <Stack.Screen
-            name="Kartlar"
-            component={KartlarScreen}
-            options={({ route }) => ({
-              title: route.params?.konu || 'Kartlar',
-            })}
-          />
-          <Stack.Screen
-            name="Detay"
-            component={DetayScreen}
-            options={({ route }) => ({
-              title: route.params?.kart?.baslik || 'Detay',
-            })}
-          />
-        </Stack.Navigator>
-      </NavigationContainer>
-    </LimitProvider>
+    <AuthProvider>
+      <AuthGate>
+        <LimitProvider>
+          <NavigationContainer>
+            <StatusBar style="light" />
+            <Stack.Navigator screenOptions={screenOptions}>
+              <Stack.Screen
+                name="Home"
+                component={HomeScreen}
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen
+                name="Kartlar"
+                component={KartlarScreen}
+                options={({ route }) => ({
+                  title: route.params?.konu || 'Kartlar',
+                })}
+              />
+              <Stack.Screen
+                name="Detay"
+                component={DetayScreen}
+                options={({ route }) => ({
+                  title: route.params?.kart?.baslik || 'Detay',
+                })}
+              />
+            </Stack.Navigator>
+          </NavigationContainer>
+        </LimitProvider>
+      </AuthGate>
+    </AuthProvider>
   );
 }

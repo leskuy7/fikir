@@ -1,10 +1,12 @@
 import Redis from 'ioredis';
-
-const MISAFIR_LIMIT = parseInt(process.env.MISAFIR_LIMIT, 10) || 5;
-const KAYITLI_LIMIT = parseInt(process.env.KAYITLI_LIMIT, 10) || 20;
-const REKLAM_ODUL_LIMIT = Number.isNaN(parseInt(process.env.REKLAM_ODUL_LIMIT, 10))
-  ? 3
-  : parseInt(process.env.REKLAM_ODUL_LIMIT, 10);
+import {
+  IS_PRODUCTION,
+  KAYITLI_LIMIT,
+  MISAFIR_LIMIT,
+  REDIS_URL,
+  REQUIRE_REDIS_IN_PROD,
+  REKLAM_ODUL_LIMIT,
+} from '../config.js';
 
 export class LimitServisiHatasi extends Error {
   constructor(message = 'Limit servisine su an ulasilamiyor') {
@@ -13,43 +15,45 @@ export class LimitServisiHatasi extends Error {
   }
 }
 
+const REDIS_ZORUNLU = IS_PRODUCTION && REQUIRE_REDIS_IN_PROD;
+const MAX_BELLEK_KAYIT = 100000;
+
 let redis = null;
 let redisHazir = false;
 
-if (process.env.REDIS_URL) {
+if (REDIS_URL) {
   try {
-    redis = new Redis(process.env.REDIS_URL, {
+    redis = new Redis(REDIS_URL, {
       connectTimeout: 3000,
       maxRetriesPerRequest: 1,
       retryStrategy(times) {
-        if (times > 3) return null; // Stop retrying after 3 attempts
-        return Math.min(times * 200, 1000);
+        return Math.min(times * 250, 5000);
       },
     });
-    
+
     redis.on('ready', () => {
       redisHazir = true;
-      console.log('Redis bağlandı ve hazır.');
+      console.log('Redis baglandi ve hazir.');
     });
 
     redis.on('error', (err) => {
       redisHazir = false;
-      console.warn('Redis bağlantı hatası:', err.message);
+      console.warn('Redis baglanti hatasi:', err.message);
     });
-    
+
     redis.on('end', () => {
       redisHazir = false;
     });
-
   } catch (err) {
     redisHazir = false;
-    console.warn('Redis başlatılamadı:', err.message);
+    console.warn('Redis baslatilamadi:', err.message);
   }
+} else if (REDIS_ZORUNLU) {
+  console.warn('REDIS_URL eksik - production ortaminda limit servisi kullanilamayacak.');
 }
 
 const sayac = new Map();
 const odulSayac = new Map();
-const MAX_BELLEK_KAYIT = 100000;
 
 setInterval(() => {
   const simdi = Date.now();
@@ -59,8 +63,9 @@ setInterval(() => {
   for (const [anahtar, kayit] of odulSayac.entries()) {
     if (simdi > kayit.sifirlanmaTarihi) odulSayac.delete(anahtar);
   }
-  if (!redisHazir && sayac.size > 0) {
-    console.warn(`Redis devre disi — bellek limit sayaci aktif (${sayac.size} kayit)`);
+
+  if (!redisHazir && !REDIS_ZORUNLU && sayac.size > 0) {
+    console.warn(`Redis devre disi - bellek limit sayaci aktif (${sayac.size} kayit)`);
   }
 }, 60 * 60 * 1000);
 
@@ -86,34 +91,81 @@ function geceYarisiSaniye() {
   return Math.max(1, Math.floor((geceyarisi - simdi) / 1000));
 }
 
+function bellekFallbackUygunMu() {
+  return !REDIS_ZORUNLU;
+}
+
+function bellekFallbackOncesiKontrol(etap) {
+  if (bellekFallbackUygunMu()) return;
+  throw new LimitServisiHatasi(`Redis kullanilabilir degil (${etap})`);
+}
+
+function bellekSayaciGetir(harita, anahtar) {
+  const simdi = Date.now();
+  const kayit = harita.get(anahtar);
+  if (!kayit) return null;
+  if (simdi > kayit.sifirlanmaTarihi) {
+    harita.delete(anahtar);
+    return null;
+  }
+  return kayit;
+}
+
+function bellekKaydiBaslat(harita, anahtar) {
+  const geceyarisi = new Date();
+  geceyarisi.setDate(geceyarisi.getDate() + 1);
+  geceyarisi.setHours(0, 0, 0, 0);
+
+  if (harita.size >= MAX_BELLEK_KAYIT) {
+    const ilkAnahtar = harita.keys().next().value;
+    harita.delete(ilkAnahtar);
+  }
+
+  const yeniKayit = {
+    sayi: 1,
+    sifirlanmaTarihi: geceyarisi.getTime(),
+  };
+  harita.set(anahtar, yeniKayit);
+  return yeniKayit;
+}
+
+function redisKullanilabilirMi() {
+  return Boolean(redis && redisHazir);
+}
+
+export function limitServisiDurumuGetir() {
+  return {
+    redisConfigured: Boolean(REDIS_URL),
+    redisReady: redisKullanilabilirMi(),
+    redisRequired: REDIS_ZORUNLU,
+    limitStore: redisKullanilabilirMi() ? 'redis' : (bellekFallbackUygunMu() ? 'memory' : 'unavailable'),
+    memoryEntries: sayac.size,
+  };
+}
+
 export async function limitDurumGetir(anahtar) {
   const limit = getLimit(anahtar);
 
-  if (redis && redisHazir) {
+  if (redisKullanilabilirMi()) {
     try {
       const sayi = await redis.get(`limit:${anahtar}`);
       const kullanilan = sayi !== null ? parseInt(sayi, 10) : 0;
       return limitiHesapla(limit, Number.isNaN(kullanilan) ? 0 : kullanilan);
-    } catch {
-      // Redis errors gracefully fallback instead of throwing LimitServisiHatasi
-      console.warn('Redis get hatasi, bellege dusuluyor');
+    } catch (err) {
+      console.warn('Redis get hatasi:', err.message);
     }
   }
 
-  const simdi = Date.now();
-  const kayit = sayac.get(anahtar);
-  if (!kayit) return limitiHesapla(limit, 0);
-  if (simdi > kayit.sifirlanmaTarihi) {
-    sayac.delete(anahtar);
-    return limitiHesapla(limit, 0);
-  }
-  return limitiHesapla(limit, kayit.sayi);
+  bellekFallbackOncesiKontrol('limit-durum');
+
+  const kayit = bellekSayaciGetir(sayac, anahtar);
+  return limitiHesapla(limit, kayit?.sayi || 0);
 }
 
 export async function limitArtir(anahtar) {
   const limit = getLimit(anahtar);
 
-  if (redis && redisHazir) {
+  if (redisKullanilabilirMi()) {
     try {
       const key = `limit:${anahtar}`;
       const ttl = geceYarisiSaniye();
@@ -121,36 +173,26 @@ export async function limitArtir(anahtar) {
       const mevcutSayi = await redis.eval(script, 1, key, ttl);
       return limitiHesapla(limit, mevcutSayi);
     } catch (err) {
-      console.warn('Redis limitArtir hatasi, bellege dusuluyor:', err.message);
+      console.warn('Redis limitArtir hatasi:', err.message);
     }
   }
 
-  const simdi = Date.now();
-  const geceyarisi = new Date();
-  geceyarisi.setDate(geceyarisi.getDate() + 1);
-  geceyarisi.setHours(0, 0, 0, 0);
-  const mevcutKayit = sayac.get(anahtar);
+  bellekFallbackOncesiKontrol('limit-artir');
 
-  if (!mevcutKayit || simdi > mevcutKayit.sifirlanmaTarihi) {
-    if (sayac.size >= MAX_BELLEK_KAYIT) {
-      const ilkAnahtar = sayac.keys().next().value;
-      sayac.delete(ilkAnahtar);
-    }
-    sayac.set(anahtar, {
-      sayi: 1,
-      sifirlanmaTarihi: geceyarisi.getTime(),
-    });
-    return limitiHesapla(limit, 1);
-  } else {
-    mevcutKayit.sayi++;
-    return limitiHesapla(limit, mevcutKayit.sayi);
+  const mevcutKayit = bellekSayaciGetir(sayac, anahtar);
+  if (!mevcutKayit) {
+    const yeniKayit = bellekKaydiBaslat(sayac, anahtar);
+    return limitiHesapla(limit, yeniKayit.sayi);
   }
+
+  mevcutKayit.sayi += 1;
+  return limitiHesapla(limit, mevcutKayit.sayi);
 }
 
 export async function limitIadeEt(anahtar) {
   const limit = getLimit(anahtar);
 
-  if (redis && redisHazir) {
+  if (redisKullanilabilirMi()) {
     try {
       const key = `limit:${anahtar}`;
       const sayi = await redis.get(key);
@@ -159,13 +201,15 @@ export async function limitIadeEt(anahtar) {
       await redis.decr(key);
       return limitiHesapla(limit, mevcut - 1);
     } catch (err) {
-      console.warn('Redis limitIadeEt hatasi, bellege dusuluyor:', err.message);
+      console.warn('Redis limitIadeEt hatasi:', err.message);
     }
   }
 
-  const simdi = Date.now();
-  const kayit = sayac.get(anahtar);
-  if (!kayit || simdi > kayit.sifirlanmaTarihi) return limitiHesapla(limit, 0);
+  bellekFallbackOncesiKontrol('limit-iade');
+
+  const kayit = bellekSayaciGetir(sayac, anahtar);
+  if (!kayit) return limitiHesapla(limit, 0);
+
   kayit.sayi = Math.max(0, kayit.sayi - 1);
   return limitiHesapla(limit, kayit.sayi);
 }
@@ -176,7 +220,7 @@ export async function reklamOdulHakkiKullan(anahtar) {
     return { limit: 0, kullanilan: 0, kalan: 0, uygun: false };
   }
 
-  if (redis && redisHazir) {
+  if (redisKullanilabilirMi()) {
     try {
       const key = `reward:${anahtar}`;
       const ttl = geceYarisiSaniye();
@@ -198,26 +242,16 @@ export async function reklamOdulHakkiKullan(anahtar) {
         uygun: true,
       };
     } catch (err) {
-      console.warn('Redis reklam odul hatasi, bellege dusuluyor:', err.message);
+      console.warn('Redis reklam odul hatasi:', err.message);
     }
   }
 
-  const simdi = Date.now();
-  const geceyarisi = new Date();
-  geceyarisi.setDate(geceyarisi.getDate() + 1);
-  geceyarisi.setHours(0, 0, 0, 0);
-  const mevcutKayit = odulSayac.get(anahtar);
+  bellekFallbackOncesiKontrol('reklam-odul-kullan');
 
-  if (!mevcutKayit || simdi > mevcutKayit.sifirlanmaTarihi) {
-    if (odulSayac.size >= MAX_BELLEK_KAYIT) {
-      const ilkAnahtar = odulSayac.keys().next().value;
-      odulSayac.delete(ilkAnahtar);
-    }
-    odulSayac.set(anahtar, {
-      sayi: 1,
-      sifirlanmaTarihi: geceyarisi.getTime(),
-    });
-    return { limit, kullanilan: 1, kalan: Math.max(0, limit - 1), uygun: true };
+  const mevcutKayit = bellekSayaciGetir(odulSayac, anahtar);
+  if (!mevcutKayit) {
+    const yeniKayit = bellekKaydiBaslat(odulSayac, anahtar);
+    return { limit, kullanilan: yeniKayit.sayi, kalan: Math.max(0, limit - yeniKayit.sayi), uygun: true };
   }
 
   if (mevcutKayit.sayi >= limit) {
@@ -239,7 +273,7 @@ export async function reklamOdulDurumGetir(anahtar) {
     return { limit: 0, kullanilan: 0, kalan: 0, uygun: false };
   }
 
-  if (redis && redisHazir) {
+  if (redisKullanilabilirMi()) {
     try {
       const sayi = await redis.get(`reward:${anahtar}`);
       const kullanilan = sayi !== null ? parseInt(sayi, 10) : 0;
@@ -251,16 +285,14 @@ export async function reklamOdulDurumGetir(anahtar) {
         uygun: guvenliKullanilan < limit,
       };
     } catch (err) {
-      console.warn('Redis reklam odul durum hatasi, bellege dusuluyor:', err.message);
+      console.warn('Redis reklam odul durum hatasi:', err.message);
     }
   }
 
-  const simdi = Date.now();
-  const kayit = odulSayac.get(anahtar);
-  if (!kayit || simdi > kayit.sifirlanmaTarihi) {
-    if (kayit && simdi > kayit.sifirlanmaTarihi) {
-      odulSayac.delete(anahtar);
-    }
+  bellekFallbackOncesiKontrol('reklam-odul-durum');
+
+  const kayit = bellekSayaciGetir(odulSayac, anahtar);
+  if (!kayit) {
     return { limit, kullanilan: 0, kalan: limit, uygun: true };
   }
 

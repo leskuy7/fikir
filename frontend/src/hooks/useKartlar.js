@@ -244,7 +244,7 @@ export function useKartlar(
         setYukleniyor(false);
       }
     },
-    [mod, kullaniciId, onBasari, onLimitDoldu, onLimitGuncelle]
+    [mod, kullaniciId, onBasari, onLimitDoldu, onLimitGuncelle, onLimitKontrol]
   );
 
   const detayAc = useCallback(

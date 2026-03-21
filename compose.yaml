@@ -1,0 +1,20 @@
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - ./backend/.env
+    environment:
+      NODE_ENV: development
+      REDIS_URL: redis://redis:6379
+      TRUST_PROXY: 1
+    ports:
+      - "3001:3001"
+    depends_on:
+      - redis

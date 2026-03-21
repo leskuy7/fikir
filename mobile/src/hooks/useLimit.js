@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 
-const MISAFIR_LIMIT = 5;
+const KAYITLI_LIMIT = 20;
 
 export function useLimit() {
   const [sunucuLimit, setSunucuLimit] = useState(null);
@@ -16,15 +16,15 @@ export function useLimit() {
     setSunucuLimit({ toplam, kalan, kullanilan });
   }, []);
 
-  const efektifToplam = sunucuLimit?.toplam ?? MISAFIR_LIMIT;
-  const efektifKalan = sunucuLimit?.kalan ?? MISAFIR_LIMIT;
+  const efektifToplam = sunucuLimit?.toplam ?? KAYITLI_LIMIT;
+  const efektifKalan = sunucuLimit?.kalan ?? KAYITLI_LIMIT;
   const efektifKullanilan = Math.max(0, efektifToplam - efektifKalan);
   const uyari = efektifKullanilan >= efektifToplam - 2 && efektifKullanilan < efektifToplam;
   const limitAsildi = efektifKalan <= 0;
 
   const limitDoldu = useCallback(() => {
     setSunucuLimit((prev) => {
-      const toplam = prev?.toplam ?? MISAFIR_LIMIT;
+      const toplam = prev?.toplam ?? KAYITLI_LIMIT;
       return { toplam, kalan: 0, kullanilan: toplam };
     });
   }, []);

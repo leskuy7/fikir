@@ -3,6 +3,7 @@ import { mesajGonder } from '../services/api';
 
 function hataMesajiniGetir(kod, fallback) {
   if (kod === 'LIMIT_DOLDU') return 'Gunluk limitin doldu. Yarin tekrar gel.';
+  if (kod === 'SERVIS_LIMITI_DOLDU') return 'AI servisi kotasi gecici olarak dolu. Birazdan tekrar dene.';
   if (kod === 'GIRIS_GEREKLI') return 'Oturumun sona ermis. Lutfen yeniden giris yap.';
   if (kod === 'YETKI_REDDEDILDI') return 'Bu islem icin yetkin bulunmuyor.';
   if (kod === 'AI_SERVISI_HATASI' || kod === 'SERVIS_GECICI_HATA') {

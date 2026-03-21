@@ -1,4 +1,5 @@
 import { useSyncExternalStore, useCallback, useState, useMemo } from 'react';
+import { getLimitStorageKey } from '../services/anonId.js';
 
 const MISAFIR_LIMIT = 5;
 const KAYITLI_LIMIT = 20;
@@ -6,10 +7,6 @@ const LIMIT_UPDATE_EVENT = 'fikir:limit-update';
 
 function bugun() {
   return new Date().toISOString().slice(0, 10);
-}
-
-function limitKey(kullaniciId) {
-  return kullaniciId ? `fikir-kutusu-limit:${kullaniciId}` : 'fikir-kutusu-limit';
 }
 
 function oku(key) {
@@ -60,7 +57,7 @@ function subscribe(key, callback) {
 }
 
 export function useLimit(kullaniciId = null) {
-  const key = limitKey(kullaniciId);
+  const key = getLimitStorageKey(kullaniciId);
   const limit = kullaniciId ? KAYITLI_LIMIT : MISAFIR_LIMIT;
 
   const snapshotString = useSyncExternalStore(

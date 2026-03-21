@@ -1,4 +1,5 @@
 import { auth } from './firebase.js';
+import { getAnonId } from './anonId.js';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
 export const SESSION_EXPIRED_EVENT = 'fikir:session-expired';
@@ -58,14 +59,29 @@ async function getIdToken(forceRefresh = false) {
   }
 }
 
+function olusturIstekHeaderlari({ idToken = null, aramOturumId = null } = {}) {
+  const headers = { 'Content-Type': 'application/json' };
+
+  if (idToken) {
+    headers.Authorization = `Bearer ${idToken}`;
+  } else {
+    const anonId = getAnonId();
+    if (anonId) headers['x-anon-id'] = anonId;
+  }
+
+  if (aramOturumId) {
+    headers['x-arama-oturumu'] = aramOturumId;
+  }
+
+  return headers;
+}
+
 export async function mesajGonder({ mesajlar, mod, kullaniciId = null, aramOturumId = null }) {
   const url = BACKEND_URL ? `${BACKEND_URL}/api/mesaj` : '/api/mesaj';
 
   const istegiGonder = async (forceRefresh = false) => {
     const idToken = await getIdToken(forceRefresh);
-    const headers = { 'Content-Type': 'application/json' };
-    if (idToken) headers.Authorization = `Bearer ${idToken}`;
-    if (aramOturumId) headers['x-arama-oturumu'] = aramOturumId;
+    const headers = olusturIstekHeaderlari({ idToken, aramOturumId });
 
     return fetch(url, {
       method: 'POST',
@@ -105,8 +121,7 @@ export async function mesajGonder({ mesajlar, mod, kullaniciId = null, aramOturu
 export async function limitDurumGetir() {
   const url = BACKEND_URL ? `${BACKEND_URL}/api/limit-durum` : '/api/limit-durum';
   const idToken = await getIdToken(false);
-  const headers = {};
-  if (idToken) headers.Authorization = `Bearer ${idToken}`;
+  const headers = olusturIstekHeaderlari({ idToken });
   const response = await fetch(url, { method: 'GET', headers });
   const limit = parseLimit(response.headers);
   const body = await cevapJsonOku(response);

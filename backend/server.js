@@ -3,11 +3,28 @@ import cors from 'cors';
 import 'dotenv/config';
 import admin from 'firebase-admin';
 import crypto from 'crypto';
+import {
+  CORS_ORIGINS,
+  FETCH_TIMEOUT_MS,
+  GEMINI_FALLBACK_MODEL,
+  GEMINI_MODEL,
+  IS_PRODUCTION,
+  MAX_BODY_KB,
+  MAX_GECMIS_MESAJ,
+  MAX_MESAJ_ICERIK_KARAKTER,
+  MAX_MESAJ_SAYISI,
+  PORT,
+  REKLAM_ODUL_MIN_BEKLEME_MS,
+  REKLAM_ODUL_OTURUM_TTL_MS,
+  REQUIRE_REDIS_IN_PROD,
+  TRUST_PROXY,
+} from './config.js';
 import { getSystemPrompt } from './prompts/sistem.js';
 import {
   limitArtir,
   limitDurumGetir,
   limitIadeEt,
+  limitServisiDurumuGetir,
   LimitServisiHatasi,
   reklamOdulDurumGetir,
   reklamOdulHakkiKullan,
@@ -40,12 +57,48 @@ async function tokenDogrula(idToken) {
   }
 }
 
+function authHeaderTokenGetir(req) {
+  const authHeader = req.headers.authorization || '';
+  return authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : null;
+}
+
+function anonIdGetir(req) {
+  const rawValue = req.headers['x-anon-id'];
+  if (typeof rawValue !== 'string') return null;
+
+  const value = rawValue.trim();
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+    ? value.toLowerCase()
+    : null;
+}
+
+function limitAnahtariGetir(req, dogrulanmisUid = null) {
+  if (dogrulanmisUid) return `uid:${dogrulanmisUid}`;
+
+  const anonId = anonIdGetir(req);
+  if (anonId) return `anon:${anonId}`;
+
+  const ip = typeof req.ip === 'string' ? req.ip.trim() : '';
+  return ip ? `ip:${ip}` : 'ip:anon';
+}
+
+function startupKontroluCalistir() {
+  if (!IS_PRODUCTION) return;
+
+  const hatalar = [];
+  if (!process.env.GEMINI_API_KEY) hatalar.push('GEMINI_API_KEY gerekli');
+  if (!process.env.REKLAM_ODUL_SECRET) hatalar.push('REKLAM_ODUL_SECRET gerekli');
+  if (REQUIRE_REDIS_IN_PROD && !process.env.REDIS_URL) hatalar.push('REDIS_URL gerekli');
+
+  if (hatalar.length === 0) return;
+
+  console.error('Sunucu baslatilamiyor. Eksik kritik env degerleri:', hatalar.join(', '));
+  process.exit(1);
+}
+
 const app = express();
-app.set('trust proxy', 1);
-const PORT = process.env.PORT || 3001;
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
-const GEMINI_FALLBACK_MODEL = process.env.GEMINI_FALLBACK_MODEL || 'gemini-2.5-flash-lite';
-const MAX_GECMIS_MESAJ = 6;
+startupKontroluCalistir();
+app.set('trust proxy', TRUST_PROXY);
 const MAX_TOKENS_BY_MOD = {
   bilgi: 900,
   fikir: 900,
@@ -65,13 +118,8 @@ const KART_SAYISI_BY_MOD = {
   fikir_tek: 1,
   ilgili: 4,
 };
-const IZNLI_ORIGINLER = new Set(
-  (process.env.CORS_ORIGINS || 'https://fikir-nine.vercel.app')
-    .split(',').map((o) => o.trim()).filter(Boolean)
-);
+const IZNLI_ORIGINLER = new Set(CORS_ORIGINS);
 const REKLAM_ODUL_SECRET = process.env.REKLAM_ODUL_SECRET || crypto.randomBytes(32).toString('hex');
-const REKLAM_ODUL_OTURUM_TTL_MS = parseInt(process.env.REKLAM_ODUL_OTURUM_TTL_MS, 10) || 10 * 60 * 1000;
-const REKLAM_ODUL_MIN_BEKLEME_MS = parseInt(process.env.REKLAM_ODUL_MIN_BEKLEME_MS, 10) || 8000;
 const reklamOdulOturumlari = new Map();
 const reklamOdulAnahtarlari = new Map();
 
@@ -241,8 +289,6 @@ async function kartlariTekTekUret(mod, messages, beklenenAdet) {
   return kartlar.length === beklenenAdet ? kartlar : null;
 }
 
-const FETCH_TIMEOUT_MS = 15000;
-
 async function geminiIstekAt({ systemPrompt, messages, maxTokens, responseSchema, model = GEMINI_MODEL }) {
   if (!process.env.GEMINI_API_KEY) {
     throw new Error('GEMINI_API_KEY tanımlanmamış — AI servisi kullanılamaz');
@@ -317,6 +363,28 @@ function apiHata(res, status, kod, hata, extra = {}) {
 
 function apiBasari(res, data = {}) {
   return res.json({ ok: true, ...data });
+}
+
+function geminiKotaHatasiMi(status, body = {}) {
+  return status === 429 || body?.error?.code === 429 || body?.error?.status === 'RESOURCE_EXHAUSTED';
+}
+
+async function geminiHatasiDon({ res, limitAnahtari, weReserved, response, body, model }) {
+  if (weReserved) await limitIadeEt(limitAnahtari).catch(() => {});
+
+  if (geminiKotaHatasiMi(response?.status, body)) {
+    return apiHata(res, 429, 'SERVIS_LIMITI_DOLDU', 'AI servisi kotasi gecici olarak dolu', {
+      retry: true,
+      model,
+      upstreamStatus: response?.status || 429,
+    });
+  }
+
+  return apiHata(res, 502, 'AI_SERVISI_HATASI', 'AI servisi su an yanit vermiyor', {
+    retry: true,
+    model,
+    upstreamStatus: response?.status || 0,
+  });
 }
 
 function limitHeaderYaz(res, limitDurum) {
@@ -417,11 +485,10 @@ app.use(
 
       callback(new Error('CORS engellendi'));
     },
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-arama-oturumu', 'x-anon-id'],
+    exposedHeaders: ['x-limit-total', 'x-limit-remaining', 'x-limit-used', 'x-request-id'],
   })
 );
-const MAX_BODY_KB = 100;
-const MAX_MESAJ_SAYISI = 20;
-const MAX_MESAJ_ICERIK_KARAKTER = 15000;
 
 app.use(express.json({ limit: `${MAX_BODY_KB}kb` }));
 
@@ -457,13 +524,18 @@ setInterval(() => {
 }, 60 * 1000);
 
 app.get('/api/limit-durum', async (req, res) => {
-  const authHeader = req.headers.authorization || '';
-  const idToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : null;
+  const idToken = authHeaderTokenGetir(req);
   let dogrulanmisUid = null;
-  if (idToken && firebaseAdminHazir) {
+  if (idToken) {
+    if (!firebaseAdminHazir) {
+      return apiHata(res, 503, 'LIMIT_SERVISI_KULLANILAMIYOR', 'Auth servisi yapilandirilmamis, lutfen daha sonra tekrar dene');
+    }
     dogrulanmisUid = await tokenDogrula(idToken);
+    if (!dogrulanmisUid) {
+      return apiHata(res, 401, 'GIRIS_GEREKLI', 'Gecersiz oturum tokeni');
+    }
   }
-  const limitAnahtari = dogrulanmisUid ? `uid:${dogrulanmisUid}` : req.ip || 'anon';
+  const limitAnahtari = limitAnahtariGetir(req, dogrulanmisUid);
   try {
     const limitDurum = await limitDurumGetir(limitAnahtari);
     limitHeaderYaz(res, limitDurum);
@@ -483,11 +555,7 @@ app.get('/api/limit-durum', async (req, res) => {
 });
 
 app.post('/api/reklam-odul/oturum', async (req, res) => {
-  const authHeader = req.headers.authorization || '';
-  const rawToken = authHeader.startsWith('Bearer ')
-    ? authHeader.slice(7).trim()
-    : null;
-  const idToken = rawToken || null;
+  const idToken = authHeaderTokenGetir(req);
 
   let dogrulanmisUid = null;
   if (idToken) {
@@ -500,9 +568,7 @@ app.post('/api/reklam-odul/oturum', async (req, res) => {
     }
   }
 
-  const limitAnahtari = dogrulanmisUid
-    ? `uid:${dogrulanmisUid}`
-    : req.ip || 'anon';
+  const limitAnahtari = limitAnahtariGetir(req, dogrulanmisUid);
 
   let limitDurum;
   try {
@@ -521,7 +587,15 @@ app.post('/api/reklam-odul/oturum', async (req, res) => {
     });
   }
 
-  const odulDurum = await reklamOdulDurumGetir(limitAnahtari);
+  let odulDurum;
+  try {
+    odulDurum = await reklamOdulDurumGetir(limitAnahtari);
+  } catch (err) {
+    if (err instanceof LimitServisiHatasi) {
+      return apiHata(res, 503, 'LIMIT_SERVISI_KULLANILAMIYOR', 'Limit servisi gecici olarak kullanilamiyor', { retry: false });
+    }
+    throw err;
+  }
   if (!odulDurum.uygun) {
     return apiHata(res, 429, 'ODUL_LIMIT_DOLDU', 'Gunluk reklam odul hakkin doldu', {
       retry: false,
@@ -551,11 +625,7 @@ app.post('/api/reklam-odul', async (req, res) => {
     return apiHata(res, 400, 'ISTEK_HATASI', 'Odul dogrulamasi icin gecerli oturum gerekli');
   }
 
-  const authHeader = req.headers.authorization || '';
-  const rawToken = authHeader.startsWith('Bearer ')
-    ? authHeader.slice(7).trim()
-    : null;
-  const idToken = rawToken || null;
+  const idToken = authHeaderTokenGetir(req);
 
   let dogrulanmisUid = null;
   if (idToken) {
@@ -568,9 +638,7 @@ app.post('/api/reklam-odul', async (req, res) => {
     }
   }
 
-  const limitAnahtari = dogrulanmisUid
-    ? `uid:${dogrulanmisUid}`
-    : req.ip || 'anon';
+  const limitAnahtari = limitAnahtariGetir(req, dogrulanmisUid);
 
   const dogrulama = reklamOdulOturumuDogrula({ oturumId, imza, limitAnahtari });
   if (!dogrulama.ok) {
@@ -597,7 +665,16 @@ app.post('/api/reklam-odul', async (req, res) => {
     });
   }
 
-  const odulDurum = await reklamOdulHakkiKullan(limitAnahtari);
+  let odulDurum;
+  try {
+    odulDurum = await reklamOdulHakkiKullan(limitAnahtari);
+  } catch (err) {
+    if (err instanceof LimitServisiHatasi) {
+      reklamOdulOturumuSil(dogrulama.oturum);
+      return apiHata(res, 503, 'LIMIT_SERVISI_KULLANILAMIYOR', 'Limit servisi gecici olarak kullanilamiyor', { retry: false });
+    }
+    throw err;
+  }
   if (!odulDurum.uygun) {
     reklamOdulOturumuSil(dogrulama.oturum);
     return apiHata(res, 429, 'ODUL_LIMIT_DOLDU', 'Gunluk reklam odul hakkin doldu', {
@@ -623,11 +700,7 @@ app.post('/api/mesaj', async (req, res) => {
   const { mesajlar, mod, kullaniciId } = req.body;
   const rawOturumId = req.headers['x-arama-oturumu'] || null;
   const aramOturumId = rawOturumId && rawOturumId.length <= 100 && /^[\w-]+$/.test(rawOturumId) ? rawOturumId : null;
-  const authHeader = req.headers.authorization || '';
-  const rawToken = authHeader.startsWith('Bearer ')
-    ? authHeader.slice(7).trim()
-    : null;
-  const idToken = rawToken || null;
+  const idToken = authHeaderTokenGetir(req);
 
   if (!mesajlar || !Array.isArray(mesajlar) || mesajlar.length === 0) {
     return apiHata(res, 400, 'ISTEK_HATASI', 'Gecersiz istek: mesajlar dizisi gerekli');
@@ -662,9 +735,7 @@ app.post('/api/mesaj', async (req, res) => {
     return apiHata(res, 403, 'YETKI_REDDEDILDI', 'Kullanici yetkisi dogrulanamadi');
   }
 
-  const limitAnahtari = dogrulanmisUid
-    ? `uid:${dogrulanmisUid}`
-    : req.ip || 'anon';
+  const limitAnahtari = limitAnahtariGetir(req, dogrulanmisUid);
 
   let limitDurum;
   try {
@@ -773,11 +844,13 @@ app.post('/api/mesaj', async (req, res) => {
             birincilHata: hata,
             fallbackHata,
           });
-          if (weReserved) await limitIadeEt(limitAnahtari);
-          return apiHata(res, 502, 'AI_SERVISI_HATASI', 'AI servisi su an yanit vermiyor', {
-            retry: true,
-            model: GEMINI_MODEL,
-            upstreamStatus: fallbackResponse.status,
+          return geminiHatasiDon({
+            res,
+            limitAnahtari,
+            weReserved,
+            response: fallbackResponse,
+            body: fallbackHata,
+            model: GEMINI_FALLBACK_MODEL,
           });
         }
       } else {
@@ -786,22 +859,15 @@ app.post('/api/mesaj', async (req, res) => {
           status: geminiResponse.status,
           hata,
         });
-        if (weReserved) await limitIadeEt(limitAnahtari);
-        return apiHata(res, 502, 'AI_SERVISI_HATASI', 'AI servisi su an yanit vermiyor', {
-          retry: true,
+        return geminiHatasiDon({
+          res,
+          limitAnahtari,
+          weReserved,
+          response: geminiResponse,
+          body: hata,
           model: GEMINI_MODEL,
-          upstreamStatus: geminiResponse.status,
         });
       }
-    }
-
-    if (!geminiResponse.ok) {
-      if (weReserved) await limitIadeEt(limitAnahtari);
-      return apiHata(res, 502, 'AI_SERVISI_HATASI', 'AI servisi su an yanit vermiyor', {
-        retry: true,
-        model: kullanilanModel,
-        upstreamStatus: geminiResponse.status,
-      });
     }
 
     const veri = await geminiResponse.json();
@@ -877,13 +943,19 @@ app.post('/api/mesaj', async (req, res) => {
 });
 
 app.get('/health', (req, res) => {
+  const limitServisi = limitServisiDurumuGetir();
   apiBasari(res, {
     kod: 'SAGLIKLI',
     durum: 'calisiyor',
     provider: 'gemini',
     model: GEMINI_MODEL,
     maxGecmisMesaj: MAX_GECMIS_MESAJ,
-    redis: !!process.env.REDIS_URL,
+    redis: limitServisi.redisConfigured,
+    redisConfigured: limitServisi.redisConfigured,
+    redisReady: limitServisi.redisReady,
+    redisRequired: limitServisi.redisRequired,
+    limitStore: limitServisi.limitStore,
+    trustProxy: TRUST_PROXY,
     firebaseAdmin: firebaseAdminHazir,
   });
 });

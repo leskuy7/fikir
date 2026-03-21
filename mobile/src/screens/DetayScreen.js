@@ -18,11 +18,19 @@ function jsonCikar(metin) {
   const basla = metin.indexOf('[');
   const bitis = metin.lastIndexOf(']') + 1;
   if (basla === -1 || bitis <= basla) return null;
+
   try {
     return JSON.parse(metin.slice(basla, bitis));
   } catch {
     return null;
   }
+}
+
+function hataMesajiGetir(kod) {
+  if (kod === 'SERVIS_LIMITI_DOLDU') return 'AI servisi kotasi gecici olarak dolu.';
+  if (kod === 'LIMIT_DOLDU') return 'Gunluk limitin doldu.';
+  if (kod === 'GIRIS_GEREKLI') return 'Oturumun sona ermis. Lutfen yeniden giris yap.';
+  return 'Icerik yuklenemedi.';
 }
 
 export default function DetayScreen({ route, navigation }) {
@@ -49,7 +57,7 @@ export default function DetayScreen({ route, navigation }) {
           setDetay(sonuclar[0].value.yanit);
           sunucudanGuncelle(sonuclar[0].value.limit);
         } else {
-          setDetay('İçerik yüklenemedi.');
+          setDetay(hataMesajiGetir(sonuclar[0].reason?.message));
         }
 
         if (sonuclar[1].status === 'fulfilled') {
@@ -57,25 +65,27 @@ export default function DetayScreen({ route, navigation }) {
           const parsed = jsonCikar(sonuclar[1].value.yanit);
           if (Array.isArray(parsed)) setIlgili(parsed);
         }
-      } catch {
-        setDetay('İçerik yüklenemedi.');
+      } catch (err) {
+        setDetay(hataMesajiGetir(err?.message));
       } finally {
         setYukleniyor(false);
       }
     };
-    yukle();
-  }, [kart]);
+
+    void yukle();
+  }, [kart, mod, sunucudanGuncelle]);
 
   const soruGonder = async () => {
-    const t = soru.trim();
-    if (!t || cevapYukleniyor) return;
+    const temizSoru = soru.trim();
+    if (!temizSoru || cevapYukleniyor) return;
+
     setCevapYukleniyor(true);
     try {
       const { yanit, limit } = await mesajGonder({
         mesajlar: [
           {
             role: 'user',
-            content: `Kart: ${kart.baslik}. ${kart.kanca || ''}\n\nKullanıcı sorusu: ${t}`,
+            content: `Kart: ${kart.baslik}. ${kart.kanca || ''}\n\nKullanici sorusu: ${temizSoru}`,
           },
         ],
         mod: 'konu_kilidi',
@@ -83,15 +93,15 @@ export default function DetayScreen({ route, navigation }) {
       sunucudanGuncelle(limit);
       setCevap(yanit);
       setSoru('');
-    } catch {
-      setCevap('Yanıt alınamadı.');
+    } catch (err) {
+      setCevap(hataMesajiGetir(err?.message));
     } finally {
       setCevapYukleniyor(false);
     }
   };
 
-  const ilgiliKartaTikla = (k) => {
-    navigation.push('Detay', { kart: k, mod });
+  const ilgiliKartaTikla = (sonrakiKart) => {
+    navigation.push('Detay', { kart: sonrakiKart, mod });
   };
 
   return (
@@ -114,28 +124,26 @@ export default function DetayScreen({ route, navigation }) {
 
         {ilgili.length > 0 && (
           <View style={s.ilgiliBolum}>
-            <Text style={s.ilgiliBaslik}>Bunlar da ilgini çekebilir</Text>
-            {ilgili.map((k, i) => (
+            <Text style={s.ilgiliBaslik}>Bunlar da ilgini cekebilir</Text>
+            {ilgili.map((ilgiliKart, index) => (
               <TouchableOpacity
-                key={i}
+                key={`${ilgiliKart.baslik || 'ilgili'}-${index}`}
                 style={s.ilgiliKart}
-                onPress={() => ilgiliKartaTikla(k)}
+                onPress={() => ilgiliKartaTikla(ilgiliKart)}
               >
-                <Text style={s.ilgiliKartBaslik}>{k.baslik}</Text>
-                {k.kanca && <Text style={s.ilgiliKartKanca}>{k.kanca}</Text>}
+                <Text style={s.ilgiliKartBaslik}>{ilgiliKart.baslik}</Text>
+                {ilgiliKart.kanca && <Text style={s.ilgiliKartKanca}>{ilgiliKart.kanca}</Text>}
               </TouchableOpacity>
             ))}
           </View>
         )}
 
         <View style={s.soruBolum}>
-          <Text style={s.soruEtiket}>
-            {kart.baslik} bağlamında —
-          </Text>
+          <Text style={s.soruEtiket}>{kart.baslik} baglaminda sorunu yaz</Text>
           <View style={s.soruRow}>
             <TextInput
               style={s.soruInput}
-              placeholder="Bu konuda merak ettiğin bir şey yaz..."
+              placeholder="Bu konuda merak ettigin bir sey yaz..."
               placeholderTextColor={tema.textSecondary}
               value={soru}
               onChangeText={setSoru}
@@ -145,15 +153,13 @@ export default function DetayScreen({ route, navigation }) {
               textAlignVertical="top"
             />
             <TouchableOpacity style={s.soruBtn} onPress={soruGonder}>
-              <Text style={s.soruBtnTxt}>Gönder</Text>
+              <Text style={s.soruBtnTxt}>Gonder</Text>
             </TouchableOpacity>
           </View>
           {cevapYukleniyor && (
             <ActivityIndicator size="small" color={tema.accent} style={{ marginTop: 12 }} />
           )}
-          {cevap && !cevapYukleniyor && (
-            <Text style={s.cevap}>{cevap}</Text>
-          )}
+          {cevap && !cevapYukleniyor && <Text style={s.cevap}>{cevap}</Text>}
         </View>
       </ScrollView>
     </SafeAreaView>

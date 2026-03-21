@@ -3,6 +3,7 @@ import html2canvas from 'html2canvas';
 
 export default function KartPaylas({ kartElementId, kartBaslik, cacheId }) {
   const [kopyalandi, setKopyalandi] = useState(false);
+  const [resimHazirlaniyor, setResimHazirlaniyor] = useState(false);
 
   const paylasimLinki = cacheId
     ? `${window.location.origin}/paylas/${cacheId}`
@@ -17,9 +18,11 @@ export default function KartPaylas({ kartElementId, kartBaslik, cacheId }) {
   }, [paylasimLinki]);
 
   const resimPaylas = useCallback(async () => {
+    if (resimHazirlaniyor) return;
     const element = document.getElementById(kartElementId);
     if (!element) return;
 
+    setResimHazirlaniyor(true);
     try {
       const canvas = await html2canvas(element, {
         scale: 2,
@@ -51,11 +54,13 @@ export default function KartPaylas({ kartElementId, kartBaslik, cacheId }) {
         link.click();
       }
     } catch (err) {
-      if (err.name !== 'AbortError') {
+      if (err?.name !== 'AbortError') {
         console.error('Paylaşım hatası:', err);
       }
+    } finally {
+      setResimHazirlaniyor(false);
     }
-  }, [kartElementId, kartBaslik, paylasimLinki]);
+  }, [kartElementId, kartBaslik, paylasimLinki, resimHazirlaniyor]);
 
   return (
     <div className="kart-paylas">
@@ -74,10 +79,11 @@ export default function KartPaylas({ kartElementId, kartBaslik, cacheId }) {
         type="button"
         className="kart-paylas__btn"
         onClick={resimPaylas}
+        disabled={resimHazirlaniyor}
         aria-label="Bu kartı resim olarak paylaş"
         title="Resim olarak paylaş"
       >
-        &#x1F4F8; Resim Paylaş
+        {resimHazirlaniyor ? 'Hazırlanıyor...' : '\uD83D\uDCF8 Resim Paylaş'}
       </button>
     </div>
   );
