@@ -249,6 +249,9 @@ export function useKartlar(
 
   const detayAc = useCallback(
     async (kart) => {
+      // Önce cache'e bakmadan limit kontrolü yapma — cache varsa API çağrılmayacak.
+      // Ama cache yoksa API çağrılacak, o yüzden cache kontrolünden sonra limit kontrol edilecek.
+
       // Mevcut açık kart varsa → geçmişe ekle
       if (acikKartRef.current) {
         setKartGecmisi((onceki) => [
@@ -310,7 +313,15 @@ export function useKartlar(
         // Cache hatası önemsiz, API'ye devam
       }
 
-      // 3) API çağrısı
+      // 3) Limit kontrolü — cache'de yoksa API çağrılacak, limit var mı bak
+      const limitKontrolMesaji = onLimitKontrol?.();
+      if (limitKontrolMesaji) {
+        setDetayYukleniyor(false);
+        setHata(limitKontrolMesaji);
+        return;
+      }
+
+      // 4) API çağrısı
       try {
         const detayMesaj = `${kart.baslik}\n\n${kart.kanca || ''}`;
         const sonuclar = await Promise.allSettled([
@@ -388,7 +399,7 @@ export function useKartlar(
         setDetayYukleniyor(false);
       }
     },
-    [mod, kullaniciId, onBasari, onLimitDoldu, onLimitGuncelle]
+    [mod, kullaniciId, onBasari, onLimitDoldu, onLimitGuncelle, onLimitKontrol]
   );
 
   // ESC / backdrop: geçmiş varsa geri git, yoksa kapat
@@ -456,6 +467,11 @@ export function useKartlar(
   const konuKilidiSoru = useCallback(
     async (soru, kartBaslik, kartKanca) => {
       if (!soru?.trim() || !acikKart) return;
+      const limitKontrolMesaji = onLimitKontrol?.();
+      if (limitKontrolMesaji) {
+        setHata(limitKontrolMesaji);
+        return;
+      }
       setKonuKilidiYukleniyor(true);
       setHata(null);
 
@@ -486,7 +502,7 @@ export function useKartlar(
         setKonuKilidiYukleniyor(false);
       }
     },
-    [acikKart, kullaniciId, onBasari, onLimitDoldu, onLimitGuncelle]
+    [acikKart, kullaniciId, onBasari, onLimitDoldu, onLimitGuncelle, onLimitKontrol]
   );
 
   return {
