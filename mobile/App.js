@@ -1,14 +1,17 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import mobileAds from 'react-native-google-mobile-ads';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { enableScreens } from 'react-native-screens';
 import AuthGate from './src/components/AuthGate';
 import { AuthProvider } from './src/context/AuthContext';
 import { LimitProvider } from './src/context/LimitContext';
 import HomeScreen from './src/screens/HomeScreen';
 import KartlarScreen from './src/screens/KartlarScreen';
 import DetayScreen from './src/screens/DetayScreen';
+
+enableScreens();
 
 const Stack = createNativeStackNavigator();
 
@@ -20,40 +23,38 @@ const screenOptions = {
 };
 
 export default function App() {
-  useEffect(() => {
-    mobileAds().initialize();
-  }, []);
-
   return (
-    <AuthProvider>
-      <AuthGate>
-        <LimitProvider>
-          <NavigationContainer>
-            <StatusBar style="light" />
-            <Stack.Navigator screenOptions={screenOptions}>
-              <Stack.Screen
-                name="Home"
-                component={HomeScreen}
-                options={{ headerShown: false }}
-              />
-              <Stack.Screen
-                name="Kartlar"
-                component={KartlarScreen}
-                options={({ route }) => ({
-                  title: route.params?.konu || 'Kartlar',
-                })}
-              />
-              <Stack.Screen
-                name="Detay"
-                component={DetayScreen}
-                options={({ route }) => ({
-                  title: route.params?.kart?.baslik || 'Detay',
-                })}
-              />
-            </Stack.Navigator>
-          </NavigationContainer>
-        </LimitProvider>
-      </AuthGate>
-    </AuthProvider>
+    <SafeAreaProvider>
+      <AuthProvider>
+        <AuthGate>
+          <LimitProvider>
+            <NavigationContainer>
+              <StatusBar style="light" />
+              <Stack.Navigator screenOptions={screenOptions}>
+                <Stack.Screen
+                  name="Home"
+                  component={HomeScreen}
+                  options={{ headerShown: false }}
+                />
+                <Stack.Screen
+                  name="Kartlar"
+                  component={KartlarScreen}
+                  options={({ route }) => ({
+                    title: route.params?.konu || 'Kartlar',
+                  })}
+                />
+                <Stack.Screen
+                  name="Detay"
+                  component={DetayScreen}
+                  options={({ route }) => ({
+                    title: route.params?.kart?.baslik || 'Detay',
+                  })}
+                />
+              </Stack.Navigator>
+            </NavigationContainer>
+          </LimitProvider>
+        </AuthGate>
+      </AuthProvider>
+    </SafeAreaProvider>
   );
 }

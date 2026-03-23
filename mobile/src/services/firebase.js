@@ -21,12 +21,24 @@ const app = firebaseHazir
 
 let auth = null;
 if (app) {
+  // Önce mevcut bir auth instance var mı bak (HMR / Fast Refresh durumu)
   try {
-    auth = initializeAuth(app, {
-      persistence: getReactNativePersistence(AsyncStorage),
-    });
-  } catch {
     auth = getAuth(app);
+  } catch {
+    // İlk başlatma — persistence ile dene
+    try {
+      auth = initializeAuth(app, {
+        persistence: getReactNativePersistence(AsyncStorage),
+      });
+    } catch (e2) {
+      // Persistence hatalıysa persistence'siz dene
+      try {
+        auth = initializeAuth(app);
+      } catch {
+        console.warn('Firebase Auth baslatılamadı:', e2?.message);
+        auth = null;
+      }
+    }
   }
 }
 
