@@ -35,7 +35,7 @@ function hataMesajiGetir(kod) {
 
 export default function DetayScreen({ route, navigation }) {
   const { kart, mod } = route.params;
-  const { sunucudanGuncelle } = useLimitContext();
+  const { sunucudanGuncelle, limitAsildi, limitDoldu } = useLimitContext();
   const [detay, setDetay] = useState(null);
   const [ilgili, setIlgili] = useState([]);
   const [yukleniyor, setYukleniyor] = useState(true);
@@ -57,6 +57,10 @@ export default function DetayScreen({ route, navigation }) {
           setDetay(sonuclar[0].value.yanit);
           sunucudanGuncelle(sonuclar[0].value.limit);
         } else {
+          if (sonuclar[0].reason?.message === 'LIMIT_DOLDU') {
+            limitDoldu?.();
+          }
+          sunucudanGuncelle(sonuclar[0].reason?.limit || null);
           setDetay(hataMesajiGetir(sonuclar[0].reason?.message));
         }
 
@@ -64,8 +68,17 @@ export default function DetayScreen({ route, navigation }) {
           sunucudanGuncelle(sonuclar[1].value.limit);
           const parsed = jsonCikar(sonuclar[1].value.yanit);
           if (Array.isArray(parsed)) setIlgili(parsed);
+        } else {
+          if (sonuclar[1].reason?.message === 'LIMIT_DOLDU') {
+            limitDoldu?.();
+          }
+          sunucudanGuncelle(sonuclar[1].reason?.limit || null);
         }
       } catch (err) {
+        if (err?.message === 'LIMIT_DOLDU') {
+          limitDoldu?.();
+        }
+        sunucudanGuncelle(err?.limit || null);
         setDetay(hataMesajiGetir(err?.message));
       } finally {
         setYukleniyor(false);
@@ -73,11 +86,15 @@ export default function DetayScreen({ route, navigation }) {
     };
 
     void yukle();
-  }, [kart, mod, sunucudanGuncelle]);
+  }, [kart, mod, sunucudanGuncelle, limitDoldu]);
 
   const soruGonder = async () => {
     const temizSoru = soru.trim();
     if (!temizSoru || cevapYukleniyor) return;
+    if (limitAsildi) {
+      setCevap('Günlük limitin doldu. Yarın tekrar gel.');
+      return;
+    }
 
     setCevapYukleniyor(true);
     try {
@@ -94,6 +111,10 @@ export default function DetayScreen({ route, navigation }) {
       setCevap(yanit);
       setSoru('');
     } catch (err) {
+      if (err?.message === 'LIMIT_DOLDU') {
+        limitDoldu?.();
+      }
+      sunucudanGuncelle(err?.limit || null);
       setCevap(hataMesajiGetir(err?.message));
     } finally {
       setCevapYukleniyor(false);
@@ -101,6 +122,7 @@ export default function DetayScreen({ route, navigation }) {
   };
 
   const ilgiliKartaTikla = (sonrakiKart) => {
+    if (limitAsildi) return;
     navigation.push('Detay', { kart: sonrakiKart, mod });
   };
 
@@ -125,11 +147,15 @@ export default function DetayScreen({ route, navigation }) {
         {ilgili.length > 0 && (
           <View style={s.ilgiliBolum}>
             <Text style={s.ilgiliBaslik}>Bunlar da ilgini cekebilir</Text>
+            {limitAsildi && (
+              <Text style={s.limitUyari}>Günlük limitin doldu. İlgili kartlara yarın devam edebilirsin.</Text>
+            )}
             {ilgili.map((ilgiliKart, index) => (
               <TouchableOpacity
                 key={`${ilgiliKart.baslik || 'ilgili'}-${index}`}
-                style={s.ilgiliKart}
+                style={[s.ilgiliKart, limitAsildi && s.pasif]}
                 onPress={() => ilgiliKartaTikla(ilgiliKart)}
+                disabled={limitAsildi}
               >
                 <Text style={s.ilgiliKartBaslik}>{ilgiliKart.baslik}</Text>
                 {ilgiliKart.kanca && <Text style={s.ilgiliKartKanca}>{ilgiliKart.kanca}</Text>}
@@ -152,8 +178,12 @@ export default function DetayScreen({ route, navigation }) {
               numberOfLines={3}
               textAlignVertical="top"
             />
-            <TouchableOpacity style={s.soruBtn} onPress={soruGonder}>
-              <Text style={s.soruBtnTxt}>Gonder</Text>
+            <TouchableOpacity
+              style={[s.soruBtn, limitAsildi && s.pasif]}
+              onPress={soruGonder}
+              disabled={limitAsildi}
+            >
+              <Text style={s.soruBtnTxt}>{limitAsildi ? 'Limit Doldu' : 'Gonder'}</Text>
             </TouchableOpacity>
           </View>
           {cevapYukleniyor && (
@@ -259,6 +289,14 @@ const s = StyleSheet.create({
     justifyContent: 'center',
   },
   soruBtnTxt: { color: tema.bg, fontWeight: '700', fontSize: 14 },
+  pasif: { opacity: 0.4 },
+  limitUyari: {
+    color: '#f59e0b',
+    fontSize: 12,
+    textAlign: 'center',
+    marginBottom: 8,
+    fontWeight: '600',
+  },
   cevap: {
     fontSize: 14,
     color: tema.text,
