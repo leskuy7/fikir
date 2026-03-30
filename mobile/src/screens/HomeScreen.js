@@ -1,217 +1,314 @@
-import React, { useState, useCallback } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import React, { useEffect, useState } from 'react';
 import {
-  View,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
-  SafeAreaView,
-  Image,
+  View,
 } from 'react-native';
+import ReklamBanner from '../components/ReklamBanner';
 import { useAuthContext } from '../context/AuthContext';
 import { useLimitContext } from '../context/LimitContext';
-import { useRewardedAd } from '../hooks/useRewardedAd';
-import { reklamOdulAl, reklamOdulOturumuBaslat } from '../services/api';
+import { useReklamOdulu } from '../hooks/useReklamOdulu';
 import { tema } from '../theme';
 
 const MODLAR = [
-  { key: 'bilgi', label: '📚 Bilgi' },
-  { key: 'fikir', label: '💡 Fikir' },
+  {
+    key: 'bilgi',
+    label: 'Bilgi',
+    aciklama: 'Aciklama, ogrenme ve hizli cevaplar',
+  },
+  {
+    key: 'fikir',
+    label: 'Fikir',
+    aciklama: 'Baslik, icerik ve yeni yonler',
+  },
 ];
+const ARAMA_GECMISI_ANAHTARI = 'fikir-kutusu-arama-gecmisi';
+
+function parseGecmis(kayit) {
+  if (!Array.isArray(kayit)) return [];
+
+  return kayit
+    .filter((oge) => typeof oge?.konu === 'string' && typeof oge?.mod === 'string')
+    .slice(0, 6);
+}
 
 export default function HomeScreen({ navigation }) {
   const [girdi, setGirdi] = useState('');
   const [aktifMod, setAktifMod] = useState('bilgi');
+  const [aramaGecmisi, setAramaGecmisi] = useState([]);
   const { kullanici, cikisYap, islemde: authIslemde } = useAuthContext();
   const { kalan, uyari, limitAsildi, sunucudanGuncelle } = useLimitContext();
-  const { goster: odulReklamiGoster, hazir: odulReklamiHazir } = useRewardedAd();
-  const [odulYukleniyor, setOdulYukleniyor] = useState(false);
-  const [odulMesaj, setOdulMesaj] = useState('');
+  const {
+    reklamIzle,
+    reklamHazir: odulReklamiHazir,
+    yukleniyor: odulYukleniyor,
+    mesaj: odulMesaj,
+  } = useReklamOdulu({
+    onLimitGuncelle: sunucudanGuncelle,
+  });
 
-  const odulMesajiGetir = useCallback((kod) => {
-    if (kod === 'ODUL_LIMIT_DOLDU') return 'Günlük reklam ödül hakkın doldu.';
-    if (kod === 'REKLAM_ODUL_GEREKSIZ') return 'Şu an reklam ödülü gerekmiyor.';
-    if (kod === 'REKLAM_ODUL_DOGRULANAMADI') return 'Reklam doğrulanamadı. Tekrar dene.';
-    if (kod === 'REKLAM_ODUL_BEKLENIYOR') return 'Reklam doğrulaması tamamlanmadı. Tekrar dene.';
-    if (kod === 'LIMIT_SERVISI_KULLANILAMIYOR') return 'Limit servisi geçici olarak kullanılamıyor.';
-    if (kod === 'ISTEK_HATASI') return 'Ödül isteği başlatılamadı. Tekrar dene.';
-    if (kod === 'BACKEND_URL_YOK') return 'Sunucu adresi bulunamadı.';
-    return 'Reklam ödülü alınamadı. Birazdan tekrar dene.';
+  useEffect(() => {
+    const gecmisiYukle = async () => {
+      try {
+        const kayit = await AsyncStorage.getItem(ARAMA_GECMISI_ANAHTARI);
+        if (!kayit) return;
+        setAramaGecmisi(parseGecmis(JSON.parse(kayit)));
+      } catch {
+        setAramaGecmisi([]);
+      }
+    };
+
+    void gecmisiYukle();
   }, []);
 
-  const reklamIzle = useCallback(async () => {
-    if (odulYukleniyor) return;
-    if (!odulReklamiHazir) {
-      setOdulMesaj('Reklam hazırlanıyor, birazdan tekrar dene.');
-      return;
-    }
+  const gecmiseKaydet = async (konu, mod) => {
+    const yeniKayit = { konu, mod };
+    const sirali = [
+      yeniKayit,
+      ...aramaGecmisi.filter((oge) => oge.konu !== konu),
+    ].slice(0, 6);
 
-    setOdulYukleniyor(true);
-    setOdulMesaj('');
-    let odulOturumu;
+    setAramaGecmisi(sirali);
+
     try {
-      const { oturum, limit } = await reklamOdulOturumuBaslat();
-      sunucudanGuncelle(limit || null);
-      if (!oturum?.id || !oturum?.imza) {
-        throw new Error('REKLAM_ODUL_DOGRULANAMADI');
-      }
-      odulOturumu = oturum;
-    } catch (err) {
-      setOdulMesaj(odulMesajiGetir(err.message));
-      setOdulYukleniyor(false);
-      return;
+      await AsyncStorage.setItem(ARAMA_GECMISI_ANAHTARI, JSON.stringify(sirali));
+    } catch {
+      // Arama gecmisi yardimci bilgi, sessizce gec.
     }
+  };
 
-    const gosterildi = odulReklamiGoster({
-      onReward: async () => {
-        try {
-          const { limit } = await reklamOdulAl({
-            oturumId: odulOturumu.id,
-            imza: odulOturumu.imza,
-          });
-          sunucudanGuncelle(limit);
-          setOdulMesaj('');
-        } catch (err) {
-          setOdulMesaj(odulMesajiGetir(err.message));
-        } finally {
-          setOdulYukleniyor(false);
-        }
-      },
-      onClosed: ({ rewarded }) => {
-        if (!rewarded) {
-          setOdulYukleniyor(false);
-          setOdulMesaj('Reklam tamamlanmadı, yeni hak açılmadı.');
-        }
-      },
-      onError: () => {
-        setOdulYukleniyor(false);
-        setOdulMesaj('Reklam açılırken bir sorun oldu. Tekrar dene.');
-      },
-    });
-    if (!gosterildi) {
-      setOdulMesaj('Reklam hazırlanıyor, birazdan tekrar dene.');
-      setOdulYukleniyor(false);
-    }
-  }, [odulMesajiGetir, odulReklamiGoster, odulReklamiHazir, odulYukleniyor, sunucudanGuncelle]);
+  const kartlaraGit = async (konu, mod) => {
+    if (!konu || limitAsildi) return;
+    await gecmiseKaydet(konu, mod);
+    navigation.navigate('Kartlar', { konu, mod });
+  };
 
   const ara = () => {
     const metin = girdi.trim();
-    if (!metin) return;
-    if (limitAsildi) {
-      void reklamIzle();
-      return;
-    }
-    navigation.navigate('Kartlar', { konu: metin, mod: aktifMod });
+    if (!metin || limitAsildi) return;
+
+    void kartlaraGit(metin, aktifMod);
     setGirdi('');
+  };
+
+  const gecmistenAc = (oge) => {
+    if (limitAsildi) return;
+    setAktifMod(oge.mod);
+    setGirdi(oge.konu);
+    void kartlaraGit(oge.konu, oge.mod);
   };
 
   return (
     <SafeAreaView style={s.container}>
-      <View style={s.arkaDaire1} />
-      <View style={s.arkaDaire2} />
-
-      <View style={s.userBar}>
-        <View style={s.userInfo}>
-          {kullanici?.photoURL ? (
-            <Image source={{ uri: kullanici.photoURL }} style={s.avatar} />
-          ) : (
-            <View style={s.avatarPlaceholder}>
-              <Text style={s.avatarText}>
-                {(kullanici?.displayName || kullanici?.email || 'K').slice(0, 1).toUpperCase()}
-              </Text>
-            </View>
-          )}
-          <View style={s.userTextWrap}>
-            <Text style={s.userLabel}>Google oturumu</Text>
-            <Text style={s.userName}>
-              {kullanici?.displayName || kullanici?.email || 'Kullanici'}
-            </Text>
-          </View>
-        </View>
-        <TouchableOpacity
-          style={[s.exitBtn, authIslemde && s.exitBtnDisabled]}
-          onPress={() => void cikisYap()}
-          disabled={authIslemde}
+      <KeyboardAvoidingView
+        style={s.klavyeKapsayici}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
+      >
+        <ScrollView
+          contentContainerStyle={s.icerik}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          showsVerticalScrollIndicator={false}
         >
-          <Text style={s.exitBtnText}>{authIslemde ? 'Bekle...' : 'Cikis'}</Text>
-        </TouchableOpacity>
-      </View>
+          <View style={s.ustBar}>
+            <View style={s.kullaniciKart}>
+              {kullanici?.photoURL ? (
+                <Image source={{ uri: kullanici.photoURL }} style={s.avatar} />
+              ) : (
+                <View style={s.avatarYerTutucu}>
+                  <Text style={s.avatarYazi}>
+                    {(kullanici?.displayName || kullanici?.email || 'K').slice(0, 1).toUpperCase()}
+                  </Text>
+                </View>
+              )}
 
-      <View style={s.hero}>
-        <View style={s.logoBadge}>
-          <Text style={s.logo}>✨</Text>
-        </View>
-        <Text style={s.baslik}>Fikir Kutusu</Text>
-        <Text style={s.altbaslik}>Merak et, keşfet, ilham al</Text>
-      </View>
+              <View style={s.kullaniciMetin}>
+                <Text style={s.kullaniciEtiket}>Google hesabi</Text>
+                <Text style={s.kullaniciAd}>
+                  {kullanici?.displayName || kullanici?.email || 'Kullanici'}
+                </Text>
+              </View>
+            </View>
 
-      <View style={s.kontrolKart}>
-        <View style={s.modRow}>
-          {MODLAR.map((m) => (
             <TouchableOpacity
-              key={m.key}
-              style={[s.modBtn, aktifMod === m.key && s.modBtnAktif]}
-              onPress={() => setAktifMod(m.key)}
+              style={[s.cikisButon, authIslemde && s.cikisButonPasif]}
+              onPress={() => void cikisYap()}
+              disabled={authIslemde}
+              activeOpacity={0.7}
             >
-              <Text style={[s.modTxt, aktifMod === m.key && s.modTxtAktif]}>
-                {m.label}
-              </Text>
+              <Text style={s.cikisYazi}>{authIslemde ? 'Bekle...' : 'Cikis'}</Text>
             </TouchableOpacity>
-          ))}
-        </View>
-
-        <TextInput
-          style={s.input}
-          placeholder={
-            aktifMod === 'bilgi'
-              ? 'Neyi merak ediyorsun?'
-              : 'Hangi alanda fikir arıyorsun?'
-          }
-          placeholderTextColor={tema.textSecondary}
-          value={girdi}
-          onChangeText={setGirdi}
-          onSubmitEditing={ara}
-          returnKeyType="search"
-        />
-
-        <TouchableOpacity style={s.btn} onPress={ara}>
-          <Text style={s.btnTxt}>
-            {aktifMod === 'bilgi' ? 'Keşfetmeye Başla' : 'Fikir Üret'}
-          </Text>
-        </TouchableOpacity>
-
-        <Text style={s.ipucu}>Kısa ve net bir konu yazman daha iyi sonuç verir.</Text>
-        {uyari && (
-          <Text style={s.limitUyari}>Günlük limitine yaklaşıyorsun — {kalan} istek kaldı.</Text>
-        )}
-        {limitAsildi && (
-          <View style={s.limitKutusu}>
-            <Text style={s.limitHata}>
-              Devam etmek için kısa bir reklam izleyebilirsin.
-            </Text>
-            <TouchableOpacity
-              style={[
-                s.limitBtn,
-                (!odulReklamiHazir || odulYukleniyor) && s.limitBtnPasif,
-              ]}
-              onPress={reklamIzle}
-              disabled={!odulReklamiHazir || odulYukleniyor}
-            >
-              <Text style={s.limitBtnTxt}>
-                {odulYukleniyor
-                  ? 'Ödül alınıyor...'
-                  : odulReklamiHazir
-                    ? 'Reklamı İzle'
-                    : 'Reklam Hazırlanıyor...'}
-              </Text>
-            </TouchableOpacity>
-            {!odulReklamiHazir && !odulMesaj && (
-              <Text style={s.limitAlt}>Reklam hazır olunca tekrar dene.</Text>
-            )}
-            {!!odulMesaj && <Text style={s.limitAlt}>{odulMesaj}</Text>}
           </View>
-        )}
-      </View>
+
+          <View style={s.ozetKart}>
+            <View style={s.ozetUst}>
+              <View style={s.ozetMetin}>
+                <Text style={s.baslik}>Fikir Kutusu</Text>
+                <Text style={s.altBaslik}>Tek konu yaz, bilgi ya da fikir kartlari al.</Text>
+              </View>
+
+              <View style={[s.hakRozeti, limitAsildi ? s.hakRozetiTehlike : s.hakRozetiNormal]}>
+                <Text
+                  style={[
+                    s.hakRozetiYazi,
+                    limitAsildi ? s.hakRozetiYaziTehlike : s.hakRozetiYaziNormal,
+                  ]}
+                >
+                  {kalan} hak
+                </Text>
+              </View>
+            </View>
+
+            <View style={s.istatistikSatiri}>
+              <View style={s.istatistikKart}>
+                <Text style={s.istatistikEtiket}>Aktif mod</Text>
+                <Text style={s.istatistikDeger}>{aktifMod === 'bilgi' ? 'Bilgi' : 'Fikir'}</Text>
+              </View>
+
+              <View style={s.istatistikKart}>
+                <Text style={s.istatistikEtiket}>Durum</Text>
+                <Text style={s.istatistikDeger}>
+                  {limitAsildi ? 'Reklam ile devam' : uyari ? 'Sinira yakin' : 'Hazir'}
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          <View style={s.kontrolKart}>
+            <Text style={s.bolumEtiket}>Arama paneli</Text>
+
+            <View style={s.modSatiri}>
+              {MODLAR.map((mod) => {
+                const aktif = aktifMod === mod.key;
+                return (
+                  <TouchableOpacity
+                    key={mod.key}
+                    style={[s.modKart, aktif && s.modKartAktif]}
+                    onPress={() => setAktifMod(mod.key)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[s.modBaslik, aktif && s.modBaslikAktif]}>{mod.label}</Text>
+                    <Text style={[s.modAciklama, aktif && s.modAciklamaAktif]}>
+                      {mod.aciklama}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <View style={s.girdiKart}>
+              <Text style={s.girdiEtiket}>Konu</Text>
+              <View style={s.inputKapsayici}>
+                <Text style={s.aramaIkonu}>{'\u2315'}</Text>
+                <TextInput
+                  style={s.input}
+                  placeholder={
+                    aktifMod === 'bilgi'
+                      ? 'Ornek: Roma Imparatorlugu neden yikildi?'
+                      : 'Ornek: kahve markasi icin kampanya fikri'
+                  }
+                  placeholderTextColor={tema.textSecondary}
+                  value={girdi}
+                  onChangeText={setGirdi}
+                  onSubmitEditing={ara}
+                  returnKeyType="search"
+                />
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={[s.anaButon, limitAsildi && s.anaButonPasif]}
+              onPress={ara}
+              disabled={limitAsildi}
+              activeOpacity={0.7}
+            >
+              <Text style={s.anaButonYazi}>
+                {aktifMod === 'bilgi' ? 'Bilgiyi Getir' : 'Fikir Uret'}
+              </Text>
+            </TouchableOpacity>
+
+            {aramaGecmisi.length > 0 && (
+              <View style={s.gecmisBolumu}>
+                <Text style={s.gecmisEtiket}>Gecmis</Text>
+                <View style={s.gecmisSatiri}>
+                  {aramaGecmisi.map((oge, index) => (
+                    <TouchableOpacity
+                      key={`${oge.konu}-${index}`}
+                      style={s.gecmisChip}
+                      onPress={() => gecmistenAc(oge)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={s.gecmisChipMod}>{oge.mod === 'bilgi' ? 'Bilgi' : 'Fikir'}</Text>
+                      <Text style={s.gecmisChipMetin} numberOfLines={1}>
+                        {oge.konu}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            )}
+
+            {uyari && !limitAsildi && (
+              <View style={[s.durumKutusu, s.uyariKutusu]}>
+                <Text style={s.uyariBaslik}>Sinira yaklastin</Text>
+                <Text style={s.uyariMetin}>{kalan} istek kaldi.</Text>
+              </View>
+            )}
+
+            {limitAsildi && (
+              <View style={s.limitKutusu}>
+                <Text style={s.limitBaslik}>Gunluk hak bitti.</Text>
+                <Text style={s.limitMetin}>
+                  Devam etmek icin odullu reklam izleyip yeni hak acabilirsin.
+                </Text>
+
+                <TouchableOpacity
+                  style={[
+                    s.limitButon,
+                    (!odulReklamiHazir || odulYukleniyor) && s.limitButonPasif,
+                  ]}
+                  onPress={reklamIzle}
+                  disabled={!odulReklamiHazir || odulYukleniyor}
+                  activeOpacity={0.7}
+                >
+                  <Text style={s.limitButonYazi}>
+                    {odulYukleniyor
+                      ? 'Odul isleniyor...'
+                      : odulReklamiHazir
+                        ? 'Reklami Izle ve Devam Et'
+                        : 'Reklam Hazirlaniyor...'}
+                  </Text>
+                </TouchableOpacity>
+
+                {!odulReklamiHazir && !odulMesaj && (
+                  <Text style={s.limitAltMetin}>Reklam yuklenince tekrar dene.</Text>
+                )}
+
+                {!!odulMesaj && (
+                  <View style={[s.durumKutusu, s.hataKutusu]}>
+                    <Text style={s.hataMetin}>{odulMesaj}</Text>
+                  </View>
+                )}
+              </View>
+            )}
+          </View>
+
+          <ReklamBanner
+            style={s.reklamKart}
+            baslik="Sponsorlu Alan"
+            aciklama="Banner reklam"
+          />
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -220,22 +317,32 @@ const s = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: tema.bg,
-    paddingHorizontal: 20,
-    justifyContent: 'center',
-    overflow: 'hidden',
   },
-  userBar: {
+  klavyeKapsayici: {
+    flex: 1,
+  },
+  icerik: {
+    flexGrow: 1,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 28,
+    gap: 14,
+  },
+  ustBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 18,
     gap: 12,
   },
-  userInfo: {
+  kullaniciKart: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    flex: 1,
+    gap: 12,
+    backgroundColor: tema.cardBg,
+    borderRadius: tema.radius,
+    borderWidth: 1,
+    borderColor: tema.cardBorder,
+    padding: 12,
   },
   avatar: {
     width: 42,
@@ -244,182 +351,321 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: tema.cardBorderStrong,
   },
-  avatarPlaceholder: {
+  avatarYerTutucu: {
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: tema.cardBg,
-    borderWidth: 1,
-    borderColor: tema.cardBorderStrong,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: tema.accentDim,
+    borderWidth: 1,
+    borderColor: tema.cardBorderStrong,
   },
-  avatarText: {
+  avatarYazi: {
     color: tema.text,
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 18,
+    fontWeight: '800',
   },
-  userTextWrap: {
+  kullaniciMetin: {
     flex: 1,
+    gap: 2,
   },
-  userLabel: {
+  kullaniciEtiket: {
     color: tema.textSecondary,
     fontSize: 11,
     textTransform: 'uppercase',
-    letterSpacing: 0.6,
+    letterSpacing: 0.8,
   },
-  userName: {
+  kullaniciAd: {
     color: tema.text,
     fontSize: 14,
     fontWeight: '700',
   },
-  exitBtn: {
+  cikisButon: {
+    paddingHorizontal: 16,
+    paddingVertical: 13,
+    borderRadius: 999,
     backgroundColor: tema.bgSecondary,
     borderWidth: 1,
     borderColor: tema.cardBorder,
-    borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
   },
-  exitBtnDisabled: {
+  cikisButonPasif: {
     opacity: 0.65,
   },
-  exitBtnText: {
+  cikisYazi: {
     color: tema.text,
     fontSize: 12,
     fontWeight: '700',
   },
-  arkaDaire1: {
-    position: 'absolute',
-    width: 220,
-    height: 220,
-    borderRadius: 999,
-    backgroundColor: tema.accentSoft,
-    top: -60,
-    right: -70,
-  },
-  arkaDaire2: {
-    position: 'absolute',
-    width: 180,
-    height: 180,
-    borderRadius: 999,
-    backgroundColor: 'rgba(120, 167, 224, 0.16)',
-    bottom: -40,
-    left: -60,
-  },
-  hero: { alignItems: 'center', marginBottom: 22 },
-  logoBadge: {
-    width: 74,
-    height: 74,
-    borderRadius: 999,
+  ozetKart: {
     backgroundColor: tema.cardBg,
+    borderRadius: tema.radius,
     borderWidth: 1,
-    borderColor: tema.cardBorderStrong,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
+    borderColor: tema.cardBorder,
+    padding: 16,
+    gap: 14,
   },
-  logo: { fontSize: 36 },
+  ozetUst: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  ozetMetin: {
+    flex: 1,
+    gap: 4,
+  },
   baslik: {
-    fontSize: 30,
-    fontWeight: '700',
     color: tema.text,
-    letterSpacing: -0.7,
+    fontSize: 26,
+    fontWeight: '800',
   },
-  altbaslik: {
-    fontSize: 15,
+  altBaslik: {
     color: tema.textSecondary,
-    marginTop: 6,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  hakRozeti: {
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderWidth: 1,
+  },
+  hakRozetiNormal: {
+    backgroundColor: tema.successDim,
+    borderColor: tema.success,
+  },
+  hakRozetiTehlike: {
+    backgroundColor: tema.dangerDim,
+    borderColor: tema.danger,
+  },
+  hakRozetiYazi: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  hakRozetiYaziNormal: {
+    color: tema.success,
+  },
+  hakRozetiYaziTehlike: {
+    color: tema.danger,
+  },
+  istatistikSatiri: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  istatistikKart: {
+    flex: 1,
+    backgroundColor: tema.bgSecondary,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: tema.cardBorder,
+    padding: 12,
+    gap: 4,
+  },
+  istatistikEtiket: {
+    color: tema.textSecondary,
+    fontSize: 11,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+  istatistikDeger: {
+    color: tema.text,
+    fontSize: 16,
+    fontWeight: '700',
   },
   kontrolKart: {
     backgroundColor: tema.cardBg,
+    borderRadius: tema.radius,
     borderWidth: 1,
     borderColor: tema.cardBorder,
-    borderRadius: tema.radius + 4,
-    padding: 14,
-    gap: 12,
+    padding: 16,
+    gap: 14,
   },
-  modRow: {
+  bolumEtiket: {
+    color: tema.textSecondary,
+    fontSize: 11,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+  modSatiri: {
     flexDirection: 'row',
+    gap: 10,
+  },
+  modKart: {
+    flex: 1,
+    backgroundColor: tema.bgSecondary,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: tema.cardBorder,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    gap: 4,
+  },
+  modKartAktif: {
+    backgroundColor: tema.accentDim,
+    borderColor: tema.accent,
+  },
+  modBaslik: {
+    color: tema.text,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  modBaslikAktif: {
+    color: tema.accent,
+  },
+  modAciklama: {
+    color: tema.textSecondary,
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  modAciklamaAktif: {
+    color: tema.text,
+  },
+  girdiKart: {
     gap: 8,
+  },
+  girdiEtiket: {
+    color: tema.text,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  inputKapsayici: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: tema.bgSecondary,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: tema.cardBorder,
+    paddingHorizontal: 14,
+  },
+  aramaIkonu: {
+    color: tema.textSecondary,
+    fontSize: 18,
+    marginRight: 10,
+  },
+  input: {
+    flex: 1,
+    color: tema.text,
+    fontSize: 16,
+    paddingVertical: 16,
+  },
+  anaButon: {
+    backgroundColor: tema.accent,
+    borderRadius: 18,
+    alignItems: 'center',
+    paddingVertical: 16,
+  },
+  anaButonPasif: {
+    opacity: 0.45,
+  },
+  anaButonYazi: {
+    color: tema.bg,
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  gecmisBolumu: {
+    gap: 10,
+  },
+  gecmisEtiket: {
+    color: tema.textSecondary,
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+  gecmisSatiri: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  gecmisChip: {
+    maxWidth: '100%',
     backgroundColor: tema.bgSecondary,
     borderRadius: 999,
     borderWidth: 1,
     borderColor: tema.cardBorder,
-    padding: 4,
-  },
-  modBtn: {
-    flex: 1,
-    paddingVertical: 10,
     paddingHorizontal: 12,
-    borderRadius: 100,
+    paddingVertical: 10,
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
   },
-  modBtnAktif: {
-    backgroundColor: tema.accentDim,
+  gecmisChipMod: {
+    color: tema.accent,
+    fontSize: 11,
+    fontWeight: '700',
   },
-  modTxt: { color: tema.textSecondary, fontSize: 14, fontWeight: '500' },
-  modTxtAktif: { color: tema.accent },
-  input: {
-    backgroundColor: tema.bgSecondary,
-    borderRadius: tema.radius,
-    paddingHorizontal: 16,
-    paddingVertical: 15,
-    fontSize: 16,
+  gecmisChipMetin: {
     color: tema.text,
+    fontSize: 12,
+    maxWidth: 180,
+  },
+  durumKutusu: {
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: tema.cardBorder,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 4,
   },
-  btn: {
-    backgroundColor: tema.accent,
-    paddingHorizontal: 20,
-    paddingVertical: 15,
-    borderRadius: tema.radius,
-    alignItems: 'center',
+  uyariKutusu: {
+    backgroundColor: tema.warningDim,
+    borderColor: tema.warning,
   },
-  btnTxt: { color: tema.bg, fontWeight: '800', fontSize: 16 },
-  ipucu: {
-    color: tema.textSecondary,
+  uyariBaslik: {
+    color: tema.warning,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  uyariMetin: {
+    color: tema.text,
     fontSize: 12,
-    textAlign: 'center',
   },
-  limitUyari: {
-    color: '#f6ad55',
+  hataKutusu: {
+    backgroundColor: tema.dangerDim,
+    borderColor: tema.danger,
+  },
+  hataMetin: {
+    color: tema.text,
     fontSize: 12,
-    textAlign: 'center',
-    marginTop: 4,
+    lineHeight: 18,
   },
   limitKutusu: {
     backgroundColor: tema.bgSecondary,
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: tema.cardBorder,
-    borderRadius: tema.radius,
-    padding: 12,
-    gap: 8,
-    marginTop: 4,
+    padding: 14,
+    gap: 10,
   },
-  limitHata: {
+  limitBaslik: {
     color: tema.text,
-    fontSize: 12,
-    textAlign: 'center',
+    fontSize: 15,
+    fontWeight: '800',
   },
-  limitBtn: {
-    backgroundColor: tema.accent,
-    paddingVertical: 10,
-    borderRadius: tema.radius,
-    alignItems: 'center',
-  },
-  limitBtnPasif: {
-    opacity: 0.6,
-  },
-  limitBtnTxt: {
-    color: tema.bg,
-    fontWeight: '700',
-    fontSize: 12,
-  },
-  limitAlt: {
+  limitMetin: {
     color: tema.textSecondary,
-    fontSize: 11,
-    textAlign: 'center',
+    fontSize: 13,
+    lineHeight: 20,
+  },
+  limitButon: {
+    backgroundColor: tema.accent,
+    borderRadius: 14,
+    alignItems: 'center',
+    paddingVertical: 14,
+  },
+  limitButonPasif: {
+    opacity: 0.65,
+  },
+  limitButonYazi: {
+    color: tema.bg,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  limitAltMetin: {
+    color: tema.textSecondary,
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  reklamKart: {
+    marginTop: 2,
   },
 });

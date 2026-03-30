@@ -4,7 +4,7 @@ import { auth } from './firebase.js';
 const DEV_HOST = Platform.OS === 'android' ? '10.0.2.2' : '127.0.0.1';
 const BACKEND_URL =
   process.env.EXPO_PUBLIC_BACKEND_URL?.trim()
-  || (__DEV__ ? `http://${DEV_HOST}:3001` : '');
+  || (__DEV__ ? `http://${DEV_HOST}:3001` : 'https://fikir-production.up.railway.app');
 
 function hataUret(kod, status = 0, extra = {}) {
   const err = new Error(kod);
@@ -19,7 +19,7 @@ function parseLimit(headers) {
   const kalan = Number(headers.get('x-limit-remaining'));
   const kullanilan = Number(headers.get('x-limit-used'));
 
-  if ([toplam, kalan, kullanilan].some((v) => Number.isNaN(v))) {
+  if ([toplam, kalan, kullanilan].some((deger) => Number.isNaN(deger))) {
     return null;
   }
 
@@ -40,9 +40,21 @@ function hataKoduMaple(response, body) {
 
   if (response.status === 401) return 'GIRIS_GEREKLI';
   if (response.status === 403) return 'YETKI_REDDEDILDI';
+  if (response.status === 408) return 'BAGLANTI_HATASI';
   if (response.status === 429) return 'LIMIT_DOLDU';
   if (response.status === 502 || response.status === 503) return 'SERVIS_GECICI_HATA';
   return 'SUNUCU_HATASI';
+}
+
+function baglantiHatasiMi(err) {
+  const mesaj = `${err?.message || ''}`.toLowerCase();
+  return (
+    err?.name === 'AbortError'
+    || mesaj.includes('network request failed')
+    || mesaj.includes('failed to fetch')
+    || mesaj.includes('networkerror')
+    || mesaj.includes('timeout')
+  );
 }
 
 async function getIdToken(forceRefresh = false) {
@@ -68,14 +80,28 @@ async function yetkiliIstekAt(path, { method = 'GET', body } = {}, forceRefresh 
 }
 
 async function istekGonder(path, options = {}) {
-  let response = await yetkiliIstekAt(path, options, false);
-  if (response.status === 401) {
-    response = await yetkiliIstekAt(path, options, true);
+  try {
+    let response = await yetkiliIstekAt(path, options, false);
+    if (response.status === 401) {
+      response = await yetkiliIstekAt(path, options, true);
+    }
+    return response;
+  } catch (err) {
+    if (baglantiHatasiMi(err)) {
+      throw hataUret('BAGLANTI_HATASI');
+    }
+    throw err;
   }
-  return response;
 }
 
-export async function mesajGonder({ mesajlar, mod, kullaniciId = null, aramOturumId = null }) {
+export async function mesajGonder({
+  mesajlar,
+  mod,
+  kullaniciId = null,
+  aramOturumId = null,
+  onLimitGuncelle,
+  onLimitDoldu,
+}) {
   if (!BACKEND_URL) {
     throw hataUret('BACKEND_URL_YOK');
   }
@@ -94,16 +120,28 @@ export async function mesajGonder({ mesajlar, mod, kullaniciId = null, aramOturu
     });
   };
 
-  let response = await istegiGonder(false);
-  if (response.status === 401) {
-    response = await istegiGonder(true);
+  let response;
+  try {
+    response = await istegiGonder(false);
+    if (response.status === 401) {
+      response = await istegiGonder(true);
+    }
+  } catch (err) {
+    if (baglantiHatasiMi(err)) {
+      throw hataUret('BAGLANTI_HATASI');
+    }
+    throw err;
   }
 
   const limit = parseLimit(response.headers);
+  onLimitGuncelle?.(limit);
   const body = await cevapJsonOku(response);
 
   if (!response.ok) {
     const kod = hataKoduMaple(response, body);
+    if (kod === 'LIMIT_DOLDU') {
+      onLimitDoldu?.();
+    }
     throw hataUret(kod, response.status, { limit, body });
   }
 
@@ -113,7 +151,7 @@ export async function mesajGonder({ mesajlar, mod, kullaniciId = null, aramOturu
   };
 }
 
-export async function reklamOdulOturumuBaslat() {
+export async function reklamOdulOturumuBaslat({ onLimitGuncelle, onLimitDoldu } = {}) {
   if (!BACKEND_URL) {
     throw hataUret('BACKEND_URL_YOK');
   }
@@ -122,10 +160,14 @@ export async function reklamOdulOturumuBaslat() {
     method: 'POST',
   });
   const limit = parseLimit(response.headers);
+  onLimitGuncelle?.(limit);
   const body = await cevapJsonOku(response);
 
   if (!response.ok) {
     const kod = hataKoduMaple(response, body);
+    if (kod === 'LIMIT_DOLDU') {
+      onLimitDoldu?.();
+    }
     throw hataUret(kod, response.status, { limit, body });
   }
 
@@ -135,7 +177,7 @@ export async function reklamOdulOturumuBaslat() {
   };
 }
 
-export async function reklamOdulAl({ oturumId, imza } = {}) {
+export async function reklamOdulAl({ oturumId, imza, onLimitGuncelle, onLimitDoldu } = {}) {
   if (!BACKEND_URL) {
     throw hataUret('BACKEND_URL_YOK');
   }
@@ -153,10 +195,14 @@ export async function reklamOdulAl({ oturumId, imza } = {}) {
     body: { oturumId, imza },
   });
   const limit = parseLimit(response.headers);
+  onLimitGuncelle?.(limit);
   const body = await cevapJsonOku(response);
 
   if (!response.ok) {
     const kod = hataKoduMaple(response, body);
+    if (kod === 'LIMIT_DOLDU') {
+      onLimitDoldu?.();
+    }
     throw hataUret(kod, response.status, { limit, body });
   }
 

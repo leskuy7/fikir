@@ -1,72 +1,61 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
-import { InterstitialAd, AdEventType, TestIds } from 'react-native-google-mobile-ads';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { AdEventType, InterstitialAd } from 'react-native-google-mobile-ads';
+import { reklamBirimleri } from '../services/mobileAds';
 
-const INTERSTITIAL_ID = __DEV__
-  ? TestIds.INTERSTITIAL
-  : (process.env.EXPO_PUBLIC_ADMOB_INTERSTITIAL_ID || TestIds.INTERSTITIAL);
-
-// Her N. detay açılışında interstitial göster
-const HER_N_ACILIS = 3;
 let acilisSayaci = 0;
+const GOSTERIM_ARALIGI = 5;
 
 export function useInterstitial() {
-  const adRef = useRef(null);
   const [hazir, setHazir] = useState(false);
-  const onClosedRef = useRef(null);
+  const reklamRef = useRef(null);
+
+  if (!reklamRef.current) {
+    reklamRef.current = InterstitialAd.createForAdRequest(reklamBirimleri.interstitial);
+  }
 
   useEffect(() => {
-    const ad = InterstitialAd.createForAdRequest(INTERSTITIAL_ID, {
-      requestNonPersonalizedAdsOnly: true,
-    });
+    const reklam = reklamRef.current;
 
-    adRef.current = ad;
-
-    const unsubLoaded = ad.addAdEventListener(AdEventType.LOADED, () => {
-      setHazir(true);
-    });
-    const unsubClosed = ad.addAdEventListener(AdEventType.CLOSED, () => {
-      // Reklam kapandığında yenisini yükle
+    const kapatYukle = () => {
       setHazir(false);
-      ad.load();
-      const cb = onClosedRef.current;
-      onClosedRef.current = null;
-      if (typeof cb === 'function') cb();
-    });
-    const unsubError = ad.addAdEventListener(AdEventType.ERROR, () => {
-      setHazir(false);
-      ad.load();
-      onClosedRef.current = null;
-    });
+      reklam.load();
+    };
 
-    ad.load();
+    const abonelikler = [
+      reklam.addAdEventListener(AdEventType.LOADED, () => setHazir(true)),
+      reklam.addAdEventListener(AdEventType.CLOSED, kapatYukle),
+      reklam.addAdEventListener(AdEventType.ERROR, kapatYukle),
+    ];
+
+    reklam.load();
 
     return () => {
-      unsubLoaded();
-      unsubClosed();
-      unsubError();
+      abonelikler.forEach((aboneliktenCik) => aboneliktenCik());
     };
   }, []);
 
-  const gosterZorla = useCallback((opts = {}) => {
-    const onClosed = typeof opts?.onClosed === 'function' ? opts.onClosed : null;
-    if (adRef.current && hazir) {
-      onClosedRef.current = onClosed;
-      adRef.current.show();
-      return true;
-    }
-    onClosedRef.current = null;
-    return false;
-  }, [hazir]);
-
-  const goster = useCallback((opts = {}) => {
-    const force = opts?.force === true;
-    if (force) return gosterZorla(opts);
+  const goster = useCallback(() => {
     acilisSayaci += 1;
-    if (acilisSayaci % HER_N_ACILIS === 0) {
-      return gosterZorla(opts);
+    const reklam = reklamRef.current;
+
+    if (acilisSayaci % GOSTERIM_ARALIGI !== 0) {
+      return false;
     }
-    return false;
-  }, [gosterZorla]);
+
+    if (!hazir) {
+      reklam.load();
+      return false;
+    }
+
+    try {
+      reklam.show();
+      return true;
+    } catch {
+      setHazir(false);
+      reklam.load();
+      return false;
+    }
+  }, [hazir]);
 
   return { goster, hazir };
 }

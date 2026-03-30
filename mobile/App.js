@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -10,6 +10,7 @@ import { LimitProvider } from './src/context/LimitContext';
 import HomeScreen from './src/screens/HomeScreen';
 import KartlarScreen from './src/screens/KartlarScreen';
 import DetayScreen from './src/screens/DetayScreen';
+import { reklamlariBaslat } from './src/services/mobileAds';
 
 enableScreens();
 
@@ -23,6 +24,10 @@ const screenOptions = {
 };
 
 export default function App() {
+  useEffect(() => {
+    void reklamlariBaslat().catch(() => {});
+  }, []);
+
   return (
     <SafeAreaProvider>
       <AuthProvider>

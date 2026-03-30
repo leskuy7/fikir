@@ -6,35 +6,57 @@ import React, {
   useMemo,
   useState,
 } from 'react';
-import * as Google from 'expo-auth-session/providers/google';
-import * as WebBrowser from 'expo-web-browser';
-import { onAuthStateChanged, signInWithCredential, signOut } from 'firebase/auth';
-import { auth, firebaseHazir, GoogleAuthProvider } from '../services/firebase';
+import { Platform } from 'react-native';
+import {
+  GoogleSignin,
+  isErrorWithCode,
+  isSuccessResponse,
+  statusCodes,
+} from '@react-native-google-signin/google-signin';
+import * as FirebaseAuth from 'firebase/auth';
+import { auth, authHatasi, firebaseHazir, GoogleAuthProvider } from '../services/firebase';
 
-WebBrowser.maybeCompleteAuthSession();
+const { onAuthStateChanged, signInWithCredential, signOut } = FirebaseAuth;
 
 const AuthContext = createContext(null);
-const PLATFORM_CLIENT_ID = PlatformClientIdGetir();
+const PLATFORM_CLIENT_ID = platformClientIdGetir();
+const GOOGLE_SIGNIN_HATASI = googleSignInYapilandir();
 
-function PlatformClientIdGetir() {
+function platformClientIdGetir() {
   return {
-    web: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || '',
-    android: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID || '',
-    ios: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID || '',
+    web: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || '563317995480-f2btk7qkn4ek38dv88fmsdssibsv3rs3.apps.googleusercontent.com',
+    android: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID || '563317995480-dk2i1qaasbj09avlfqae2gof5antmljm.apps.googleusercontent.com',
+    ios: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID || '563317995480-8rah7362kjqlep9s6uo5bghqtj0nc87l.apps.googleusercontent.com',
   };
 }
 
+function googleSignInYapilandir() {
+  try {
+    GoogleSignin.configure({
+      webClientId: PLATFORM_CLIENT_ID.web || undefined,
+      iosClientId: PLATFORM_CLIENT_ID.ios || undefined,
+      scopes: ['email', 'profile'],
+    });
+    return null;
+  } catch (err) {
+    return err?.message || 'Google Sign-In configure hatasi';
+  }
+}
+
 function googleYapilandirmaHatasi() {
-  if (!firebaseHazir || !auth) {
+  if (!firebaseHazir) {
     return 'Firebase ayarlari eksik. EXPO_PUBLIC_FIREBASE_* alanlarini kontrol et.';
+  }
+  if (!auth) {
+    return `Firebase Auth baslatilamadi: ${authHatasi || 'bilinmeyen hata'}`;
+  }
+  if (GOOGLE_SIGNIN_HATASI) {
+    return `Google Sign-In baslatilamadi: ${GOOGLE_SIGNIN_HATASI}`;
   }
   if (!PLATFORM_CLIENT_ID.web) {
     return 'EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID tanimli degil.';
   }
-  if (!PLATFORM_CLIENT_ID.android) {
-    return 'EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID tanimli degil.';
-  }
-  if (!PLATFORM_CLIENT_ID.ios) {
+  if (Platform.OS === 'ios' && !PLATFORM_CLIENT_ID.ios) {
     return 'EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID tanimli degil.';
   }
   return null;
@@ -45,17 +67,6 @@ export function AuthProvider({ children }) {
   const [yukleniyor, setYukleniyor] = useState(Boolean(auth));
   const [islemde, setIslemde] = useState(false);
   const [hata, setHata] = useState(googleYapilandirmaHatasi());
-
-  const [request, response, promptAsync] = Google.useIdTokenAuthRequest(
-    {
-      webClientId: PLATFORM_CLIENT_ID.web || undefined,
-      androidClientId: PLATFORM_CLIENT_ID.android || undefined,
-      iosClientId: PLATFORM_CLIENT_ID.ios || undefined,
-      scopes: ['profile', 'email'],
-      selectAccount: true,
-    },
-    { scheme: 'fikirkutusu' }
-  );
 
   useEffect(() => {
     if (!auth) {
@@ -71,79 +82,62 @@ export function AuthProvider({ children }) {
     return abonelik;
   }, []);
 
-  useEffect(() => {
-    if (!response) return;
-
-    if (response.type !== 'success') {
-      if (response.type === 'error') {
-        setHata('Google girisi tamamlanamadi. Lutfen tekrar dene.');
-      }
-      setIslemde(false);
-      return;
-    }
-
-    const idToken = response.params?.id_token;
-    if (!idToken || !auth) {
-      setHata('Google kimlik bilgisi alinamadi.');
-      setIslemde(false);
-      return;
-    }
-
-    let aktif = true;
-    const girisiTamamla = async () => {
-      try {
-        const credential = GoogleAuthProvider.credential(idToken);
-        await signInWithCredential(auth, credential);
-        if (aktif) setHata(null);
-      } catch (err) {
-        console.error('Google giris hatasi:', err?.code || err);
-        if (aktif) {
-          setHata('Google ile giris yapilamadi. Firebase ve OAuth ayarlarini kontrol et.');
-        }
-      } finally {
-        if (aktif) setIslemde(false);
-      }
-    };
-
-    void girisiTamamla();
-    return () => {
-      aktif = false;
-    };
-  }, [response]);
-
   const girisYap = useCallback(async () => {
     const configHatasi = googleYapilandirmaHatasi();
     if (configHatasi) {
       setHata(configHatasi);
       return false;
     }
-    if (!request) {
-      setHata('Google girisi henuz hazir degil. Kisa bir sure sonra tekrar dene.');
-      return false;
-    }
 
     setHata(null);
     setIslemde(true);
 
     try {
-      const sonuc = await promptAsync();
-      if (sonuc.type !== 'success') {
+      await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+      const sonuc = await GoogleSignin.signIn();
+
+      if (!isSuccessResponse(sonuc)) {
         setIslemde(false);
+        setHata(null);
+        return false;
       }
-      return sonuc.type === 'success';
-    } catch (err) {
-      console.error('Google giris baslatma hatasi:', err);
+
+      const idToken = sonuc.data.idToken;
+      if (!idToken || !auth) {
+        setHata('Google kimlik bilgisi alinamadi. Web Client ID ayarini kontrol et.');
+        setIslemde(false);
+        return false;
+      }
+
+      const credential = GoogleAuthProvider.credential(idToken);
+      await signInWithCredential(auth, credential);
+      setHata(null);
       setIslemde(false);
-      setHata('Google girisi baslatilamadi.');
+      return true;
+    } catch (err) {
+      console.error('Google giris hatasi:', err?.code || err);
+      if (isErrorWithCode(err)) {
+        if (err.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+          setHata('Google Play servisleri kullanilamiyor. Emulatorde Play Store image kullan.');
+        } else if (err.code === statusCodes.IN_PROGRESS) {
+          setHata('Google girisi zaten acik. Ekrani kapatip tekrar dene.');
+        } else {
+          setHata(`Google ile giris yapilamadi: ${err?.message || err.code}`);
+        }
+      } else {
+        setHata('Google ile giris yapilamadi. OAuth ayarlarini kontrol et.');
+      }
+      setIslemde(false);
       return false;
     }
-  }, [promptAsync, request]);
+  }, []);
 
   const cikisYap = useCallback(async () => {
     if (!auth) return;
     setIslemde(true);
     setHata(null);
     try {
+      await GoogleSignin.signOut().catch(() => null);
       await signOut(auth);
     } catch (err) {
       console.error('Cikis hatasi:', err?.code || err);
@@ -153,7 +147,7 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
-  const girisHazir = Boolean(request);
+  const girisHazir = !Boolean(googleYapilandirmaHatasi());
   const value = useMemo(() => ({
     kullanici,
     yukleniyor,

@@ -8,20 +8,39 @@
       "developmentClient": true,
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_BACKEND_URL": "http://10.0.2.2:3001"
+        "EXPO_PUBLIC_BACKEND_URL": "http://10.0.2.2:3001",
+        "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyBjJynYGrTCGJ3PxshAh8R3929EJqMqrx0",
+        "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "fikir-kutusu.firebaseapp.com",
+        "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "fikir-kutusu",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "563317995480-f2btk7qkn4ek38dv88fmsdssibsv3rs3.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "563317995480-dk2i1qaasbj09avlfqae2gof5antmljm.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "563317995480-8rah7362kjqlep9s6uo5bghqtj0nc87l.apps.googleusercontent.com",
+        "ADMOB_ANDROID_APP_ID": "ca-app-pub-3940256099942544~3347511713",
+        "EXPO_PUBLIC_ADMOB_BANNER_ID": "ca-app-pub-3940256099942544/9214589741",
+        "EXPO_PUBLIC_ADMOB_INTERSTITIAL_ID": "ca-app-pub-3940256099942544/1033173712",
+        "EXPO_PUBLIC_ADMOB_REWARDED_ID": "ca-app-pub-3940256099942544/5224354917"
       }
     },
     "preview-apk": {
       "distribution": "internal",
-      "image": "ubuntu-24.04-jdk-17-ndk-r27b-sdk-55",
       "android": {
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_BACKEND_URL": "https://fikir-production.up.railway.app"
+        "EXPO_PUBLIC_BACKEND_URL": "https://fikir-production.up.railway.app",
+        "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyBjJynYGrTCGJ3PxshAh8R3929EJqMqrx0",
+        "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "fikir-kutusu.firebaseapp.com",
+        "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "fikir-kutusu",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "563317995480-f2btk7qkn4ek38dv88fmsdssibsv3rs3.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "563317995480-dk2i1qaasbj09avlfqae2gof5antmljm.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "563317995480-8rah7362kjqlep9s6uo5bghqtj0nc87l.apps.googleusercontent.com",
+        "ADMOB_ANDROID_APP_ID": "ca-app-pub-3940256099942544~3347511713",
+        "EXPO_PUBLIC_ADMOB_BANNER_ID": "ca-app-pub-3940256099942544/9214589741",
+        "EXPO_PUBLIC_ADMOB_INTERSTITIAL_ID": "ca-app-pub-3940256099942544/1033173712",
+        "EXPO_PUBLIC_ADMOB_REWARDED_ID": "ca-app-pub-3940256099942544/5224354917"
       },
       "cache": {
-        "key": "preview-apk-v1"
+        "key": "preview-apk-v2"
       }
     },
     "production": {
@@ -29,7 +48,17 @@
         "buildType": "app-bundle"
       },
       "env": {
-        "EXPO_PUBLIC_BACKEND_URL": "https://fikir-production.up.railway.app"
+        "EXPO_PUBLIC_BACKEND_URL": "https://fikir-production.up.railway.app",
+        "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyBjJynYGrTCGJ3PxshAh8R3929EJqMqrx0",
+        "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "fikir-kutusu.firebaseapp.com",
+        "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "fikir-kutusu",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "563317995480-f2btk7qkn4ek38dv88fmsdssibsv3rs3.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "563317995480-dk2i1qaasbj09avlfqae2gof5antmljm.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "563317995480-8rah7362kjqlep9s6uo5bghqtj0nc87l.apps.googleusercontent.com",
+        "ADMOB_ANDROID_APP_ID": "ca-app-pub-3940256099942544~3347511713",
+        "EXPO_PUBLIC_ADMOB_BANNER_ID": "ca-app-pub-3940256099942544/9214589741",
+        "EXPO_PUBLIC_ADMOB_INTERSTITIAL_ID": "ca-app-pub-3940256099942544/1033173712",
+        "EXPO_PUBLIC_ADMOB_REWARDED_ID": "ca-app-pub-3940256099942544/5224354917"
       }
     }
   },

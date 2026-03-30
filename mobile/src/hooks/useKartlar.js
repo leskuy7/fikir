@@ -1,7 +1,8 @@
-import { useState, useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { mesajGonder } from '../services/api';
 
 function hataMesajiniGetir(kod, fallback) {
+  if (kod === 'BAGLANTI_HATASI') return 'Baglanti hatasi, tekrar dene.';
   if (kod === 'LIMIT_DOLDU') return 'Gunluk limitin doldu. Yarin tekrar gel.';
   if (kod === 'SERVIS_LIMITI_DOLDU') return 'AI servisi kotasi gecici olarak dolu. Birazdan tekrar dene.';
   if (kod === 'GIRIS_GEREKLI') return 'Oturumun sona ermis. Lutfen yeniden giris yap.';
@@ -40,11 +41,10 @@ function jsonCikar(metin) {
       if (Array.isArray(parsed)) return parsed;
       if (Array.isArray(parsed?.kartlar)) return parsed.kartlar;
     } catch {
-      // Sonraki adayi dene
+      // Sonraki adayi dene.
     }
   }
 
-  // JSON dizi kesik geldiyse (truncate), tamamlanmis objectleri kurtar.
   const parcali = kesikJsondanKartlariTopla(temiz);
   if (Array.isArray(parcali) && parcali.length > 0) {
     return parcali;
@@ -63,8 +63,8 @@ function kesikJsondanKartlariTopla(metin) {
   let inString = false;
   let escape = false;
 
-  for (let i = basla; i < metin.length; i += 1) {
-    const ch = metin[i];
+  for (let index = basla; index < metin.length; index += 1) {
+    const ch = metin[index];
 
     if (inString) {
       if (escape) {
@@ -86,14 +86,14 @@ function kesikJsondanKartlariTopla(metin) {
 
     if (ch === '{') {
       depth += 1;
-      if (depth === 1) objeBaslangic = i;
+      if (depth === 1) objeBaslangic = index;
       continue;
     }
 
     if (ch === '}') {
       if (depth > 0) depth -= 1;
       if (depth === 0 && objeBaslangic !== -1) {
-        const parca = metin.slice(objeBaslangic, i + 1);
+        const parca = metin.slice(objeBaslangic, index + 1);
         try {
           const parsed = JSON.parse(parca);
           if (parsed?.baslik && parsed?.kanca) {
@@ -110,12 +110,20 @@ function kesikJsondanKartlariTopla(metin) {
   return kartlar.length > 0 ? kartlar : null;
 }
 
-// 1 istekle tum kartlari alir ve direkt gosterir.
-async function kartlariGetirVeGoster({ konuMetni, mod, kullaniciId, setKartlar }) {
+async function kartlariGetirVeGoster({
+  konuMetni,
+  mod,
+  kullaniciId,
+  setKartlar,
+  onLimitGuncelle,
+  onLimitDoldu,
+}) {
   const { yanit, limit } = await mesajGonder({
     mesajlar: [{ role: 'user', content: konuMetni }],
     mod,
     kullaniciId,
+    onLimitGuncelle,
+    onLimitDoldu,
   });
 
   const kartlar = jsonCikar(yanit);
@@ -159,31 +167,34 @@ export function useKartlar(mod, kullaniciId = null, { onLimitDoldu, onLimitGunce
             mod,
             kullaniciId,
             setKartlar,
+            onLimitGuncelle,
+            onLimitDoldu,
           });
           const biriken = sonuc?.kartlar || [];
           onLimitGuncelle?.(sonuc?.limit || null);
 
           if (biriken.length === 0) {
-            setHata('Kartlar alınamadı. Tekrar dene.');
+            setHata('Kartlar alinamadi. Tekrar dene.');
           }
         } else {
           const { yanit, limit } = await mesajGonder({
             mesajlar: [{ role: 'user', content: konuMetni }],
             mod,
             kullaniciId,
+            onLimitGuncelle,
+            onLimitDoldu,
           });
           onLimitGuncelle?.(limit);
           const parsed = jsonCikar(yanit);
           if (Array.isArray(parsed) && parsed.length > 0) {
             setKartlar(parsed);
           } else {
-            setHata('Kartlar alınamadı. Tekrar dene.');
+            setHata('Kartlar alinamadi. Tekrar dene.');
           }
         }
       } catch (err) {
         onLimitGuncelle?.(err?.limit || null);
         if (err.message === 'LIMIT_DOLDU') {
-          onLimitDoldu?.();
           setLimitHatasi(true);
           setHata(null);
         } else {
@@ -212,25 +223,29 @@ export function useKartlar(mod, kullaniciId = null, { onLimitDoldu, onLimitGunce
             mesajlar: [{ role: 'user', content: detayMesaj }],
             mod: 'detay',
             kullaniciId,
+            onLimitGuncelle,
+            onLimitDoldu,
           }),
           mesajGonder({
             mesajlar: [{ role: 'user', content: detayMesaj }],
             mod: 'ilgili',
             kullaniciId,
+            onLimitGuncelle,
+            onLimitDoldu,
           }),
         ]);
 
         let basariliSayi = 0;
-        let limitHatasi = false;
+        let limitHatasiVar = false;
 
         if (sonuclar[0].status === 'fulfilled') {
           setDetayIcerik(sonuclar[0].value.yanit);
           onLimitGuncelle?.(sonuclar[0].value.limit);
-          basariliSayi++;
+          basariliSayi += 1;
         } else {
           onLimitGuncelle?.(sonuclar[0].reason?.limit || null);
           if (sonuclar[0].reason?.message === 'LIMIT_DOLDU') {
-            limitHatasi = true;
+            limitHatasiVar = true;
           }
         }
 
@@ -240,16 +255,15 @@ export function useKartlar(mod, kullaniciId = null, { onLimitDoldu, onLimitGunce
           if (Array.isArray(ilgiliParsed) && ilgiliParsed.length > 0) {
             setIlgiliKartlar(ilgiliParsed);
           }
-          basariliSayi++;
+          basariliSayi += 1;
         } else {
           onLimitGuncelle?.(sonuclar[1].reason?.limit || null);
           if (sonuclar[1].reason?.message === 'LIMIT_DOLDU') {
-            limitHatasi = true;
+            limitHatasiVar = true;
           }
         }
 
-        if (limitHatasi) {
-          onLimitDoldu?.();
+        if (limitHatasiVar) {
           setLimitHatasi(true);
           if (basariliSayi === 0) setHata(null);
         } else if (basariliSayi === 0) {
@@ -258,7 +272,6 @@ export function useKartlar(mod, kullaniciId = null, { onLimitDoldu, onLimitGunce
       } catch (err) {
         onLimitGuncelle?.(err?.limit || null);
         if (err.message === 'LIMIT_DOLDU') {
-          onLimitDoldu?.();
           setLimitHatasi(true);
           setHata(null);
         } else {

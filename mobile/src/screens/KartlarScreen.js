@@ -1,135 +1,83 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import {
-  View,
-  Text,
   FlatList,
-  TouchableOpacity,
-  ActivityIndicator,
-  StyleSheet,
   SafeAreaView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { useKartlar } from '../hooks/useKartlar';
+import ReklamBanner from '../components/ReklamBanner';
 import { useLimitContext } from '../context/LimitContext';
 import { useInterstitial } from '../hooks/useInterstitial';
-import { useRewardedAd } from '../hooks/useRewardedAd';
-import ReklamBanner from '../components/ReklamBanner';
-import { reklamOdulAl, reklamOdulOturumuBaslat } from '../services/api';
+import { useKartlar } from '../hooks/useKartlar';
+import { useReklamOdulu } from '../hooks/useReklamOdulu';
 import { tema } from '../theme';
 
-const EMOJILER_BILGI = ['💡', '🔭', '⚡', '🧩', '🔄', '🌍'];
-const EMOJILER_FIKIR = ['🚀', '💡', '🎯', '⚡', '🌟', '🔧'];
+const ISKELET_KARTLAR = Array.from({ length: 4 }, (_, index) => ({ key: `iskelet-${index}` }));
 
 export default function KartlarScreen({ route, navigation }) {
   const { konu, mod } = route.params;
-  const { limitDoldu, sunucudanGuncelle } = useLimitContext();
+  const { limitDoldu, limitAsildi, sunucudanGuncelle } = useLimitContext();
   const { goster: interstitialGoster } = useInterstitial();
-  const { goster: odulReklamiGoster, hazir: odulReklamiHazir } = useRewardedAd();
   const { kartlar, yukleniyor, hata, kartlariGetir, limitHatasi } = useKartlar(mod, null, {
     onLimitDoldu: limitDoldu,
     onLimitGuncelle: sunucudanGuncelle,
   });
-  const [odulYukleniyor, setOdulYukleniyor] = useState(false);
-  const [odulMesaj, setOdulMesaj] = useState('');
   const autoDenendiRef = useRef(false);
+  const {
+    reklamIzle,
+    reklamHazir: odulReklamiHazir,
+    yukleniyor: odulYukleniyor,
+    mesaj: odulMesaj,
+  } = useReklamOdulu({
+    onLimitGuncelle: sunucudanGuncelle,
+    onOdulTamamlandi: async () => {
+      await kartlariGetir(konu);
+    },
+  });
 
   useEffect(() => {
-    kartlariGetir(konu);
+    void kartlariGetir(konu);
   }, [konu, kartlariGetir]);
 
-  const odulMesajiGetir = useCallback((kod) => {
-    if (kod === 'ODUL_LIMIT_DOLDU') return 'Günlük reklam ödül hakkın doldu.';
-    if (kod === 'REKLAM_ODUL_GEREKSIZ') return 'Şu an reklam ödülü gerekmiyor.';
-    if (kod === 'REKLAM_ODUL_DOGRULANAMADI') return 'Reklam doğrulanamadı. Tekrar dene.';
-    if (kod === 'REKLAM_ODUL_BEKLENIYOR') return 'Reklam doğrulaması tamamlanmadı. Tekrar dene.';
-    if (kod === 'LIMIT_SERVISI_KULLANILAMIYOR') return 'Limit servisi geçici olarak kullanılamıyor.';
-    if (kod === 'ISTEK_HATASI') return 'Ödül isteği başlatılamadı. Tekrar dene.';
-    if (kod === 'BACKEND_URL_YOK') return 'Sunucu adresi bulunamadı.';
-    return 'Reklam ödülü alınamadı. Birazdan tekrar dene.';
-  }, []);
-
-  const reklamIzle = useCallback(async () => {
-    if (odulYukleniyor) return false;
-    if (!odulReklamiHazir) {
-      setOdulMesaj('Reklam hazırlanıyor, birazdan tekrar dene.');
-      return false;
-    }
-
-    setOdulYukleniyor(true);
-    setOdulMesaj('');
-    let odulOturumu;
-    try {
-      const { oturum, limit } = await reklamOdulOturumuBaslat();
-      sunucudanGuncelle(limit || null);
-      if (!oturum?.id || !oturum?.imza) {
-        throw new Error('REKLAM_ODUL_DOGRULANAMADI');
-      }
-      odulOturumu = oturum;
-    } catch (err) {
-      setOdulMesaj(odulMesajiGetir(err.message));
-      setOdulYukleniyor(false);
-      return false;
-    }
-
-    const gosterildi = odulReklamiGoster({
-      onReward: async () => {
-        try {
-          const { limit } = await reklamOdulAl({
-            oturumId: odulOturumu.id,
-            imza: odulOturumu.imza,
-          });
-          sunucudanGuncelle(limit);
-          setOdulMesaj('');
-          kartlariGetir(konu);
-        } catch (err) {
-          setOdulMesaj(odulMesajiGetir(err.message));
-        } finally {
-          setOdulYukleniyor(false);
-        }
-      },
-      onClosed: ({ rewarded }) => {
-        if (!rewarded) {
-          setOdulYukleniyor(false);
-          setOdulMesaj('Reklam tamamlanmadı, yeni hak açılmadı.');
-        }
-      },
-      onError: () => {
-        setOdulYukleniyor(false);
-        setOdulMesaj('Reklam açılırken bir sorun oldu. Tekrar dene.');
-      },
-    });
-    if (!gosterildi) {
-      setOdulMesaj('Reklam hazırlanıyor, birazdan tekrar dene.');
-      setOdulYukleniyor(false);
-    }
-    return gosterildi;
-  }, [kartlariGetir, konu, odulMesajiGetir, odulReklamiGoster, odulReklamiHazir, odulYukleniyor, sunucudanGuncelle]);
-
   useEffect(() => {
-    if (limitHatasi) {
-      if (!autoDenendiRef.current) {
-        autoDenendiRef.current = true;
-        void reklamIzle();
-      }
-    } else {
+    if (limitHatasi && !autoDenendiRef.current) {
+      autoDenendiRef.current = true;
+      return;
+    }
+
+    if (!limitHatasi) {
       autoDenendiRef.current = false;
     }
-  }, [limitHatasi, reklamIzle]);
+  }, [limitHatasi]);
 
-  const emojiler = mod === 'bilgi' ? EMOJILER_BILGI : EMOJILER_FIKIR;
+  const ekranBasligi = useMemo(() => {
+    if (yukleniyor) return `"${konu}" araniyor...`;
+    if (kartlar.length > 0) {
+      return `${kartlar.length} ${mod === 'bilgi' ? 'bilgi' : 'fikir'} karti bulundu`;
+    }
+    return `"${konu}" icin sonuc bekleniyor`;
+  }, [kartlar.length, konu, mod, yukleniyor]);
 
-  const kartaTikla = async (kart) => {
-    interstitialGoster(); // Her 3. kart açılışında geçiş reklamı
-    navigation.navigate('Detay', { kart, mod });
+  const kartaTikla = (kart) => {
+    if (limitAsildi) return;
+    interstitialGoster();
+    navigation.navigate('Detay', {
+      kart,
+      mod,
+      kartGecmisi: [kart],
+    });
   };
 
   const renderKart = ({ item, index }) => (
     <TouchableOpacity
-      style={s.kart}
+      style={[s.kart, limitAsildi && s.kartPasif]}
       onPress={() => kartaTikla(item)}
+      disabled={limitAsildi}
       activeOpacity={0.7}
     >
       <View style={s.kartUst}>
-        <Text style={s.emoji}>{emojiler[index % emojiler.length]}</Text>
         <Text style={s.etiket}>
           {mod === 'bilgi' ? 'Bilgi' : 'Fikir'} {index + 1}
         </Text>
@@ -143,59 +91,77 @@ export default function KartlarScreen({ route, navigation }) {
     <SafeAreaView style={s.container}>
       <View style={s.ustKart}>
         <Text style={s.modRozet}>{mod === 'bilgi' ? 'Bilgi Modu' : 'Fikir Modu'}</Text>
-        <Text style={s.ustBaslik}>
-          {kartlar.length > 0
-            ? `${kartlar.length} ${mod === 'bilgi' ? 'bilgi' : 'fikir'} kartı bulundu`
-            : `"${konu}" aranıyor...`}
-        </Text>
+        <Text style={s.ustBaslik}>{ekranBasligi}</Text>
         <Text style={s.konuMetin}>Konu: {konu}</Text>
       </View>
 
-      {yukleniyor && (
-        <ActivityIndicator
-          size="large"
-          color={tema.accent}
-          style={{ marginTop: 22 }}
-        />
-      )}
-
       {limitHatasi && (
         <View style={s.limitKutusu}>
-          <Text style={s.limitBaslik}>Devam etmek için kısa bir reklam izle.</Text>
+          <Text style={s.limitBaslik}>Devam etmek icin kisa bir reklam izle.</Text>
           <TouchableOpacity
-            style={[
-              s.limitBtn,
-              (!odulReklamiHazir || odulYukleniyor) && s.limitBtnPasif,
-            ]}
+            style={[s.limitBtn, (!odulReklamiHazir || odulYukleniyor) && s.limitBtnPasif]}
             onPress={reklamIzle}
             disabled={!odulReklamiHazir || odulYukleniyor}
+            activeOpacity={0.7}
           >
             <Text style={s.limitBtnTxt}>
               {odulYukleniyor
-                ? 'Ödül alınıyor...'
+                ? 'Odul aliniyor...'
                 : odulReklamiHazir
-                  ? 'Reklamı İzle'
-                  : 'Reklam Hazırlanıyor...'}
+                  ? 'Reklami Izle ve Devam Et'
+                  : 'Reklam Hazirlaniyor...'}
             </Text>
           </TouchableOpacity>
+
           {!odulReklamiHazir && !odulMesaj && (
-            <Text style={s.limitAlt}>Reklam hazır olunca tekrar dene.</Text>
+            <Text style={s.limitAlt}>Reklam hazir olunca tekrar dene.</Text>
           )}
-          {!!odulMesaj && <Text style={s.limitAlt}>{odulMesaj}</Text>}
+
+          {!!odulMesaj && (
+            <View style={[s.durumKutusu, s.hataKutusu]}>
+              <Text style={s.hataMetni}>{odulMesaj}</Text>
+            </View>
+          )}
         </View>
       )}
 
-      {hata && <Text style={s.hata}>{hata}</Text>}
+      {!!hata && (
+        <View style={[s.durumKutusu, s.hataKutusu, s.hataKutusuDis]}>
+          <Text style={s.hataMetni}>{hata}</Text>
+        </View>
+      )}
 
-      <FlatList
-        data={kartlar}
-        renderItem={renderKart}
-        keyExtractor={(item, i) => `${item.baslik || 'kart'}-${i}`}
-        numColumns={2}
-        columnWrapperStyle={s.satir}
-        contentContainerStyle={s.liste}
-        showsVerticalScrollIndicator={false}
-      />
+      {yukleniyor ? (
+        <View style={s.iskeletAlan}>
+          {ISKELET_KARTLAR.map((kart) => (
+            <View key={kart.key} style={s.iskeletKart}>
+              <View style={s.iskeletRozet} />
+              <View style={s.iskeletBaslik} />
+              <View style={s.iskeletSatir} />
+              <View style={[s.iskeletSatir, s.iskeletSatirKisa]} />
+            </View>
+          ))}
+        </View>
+      ) : kartlar.length > 0 ? (
+        <FlatList
+          data={kartlar}
+          renderItem={renderKart}
+          keyExtractor={(item, index) => `${item.baslik || 'kart'}-${index}`}
+          numColumns={2}
+          columnWrapperStyle={s.satir}
+          contentContainerStyle={s.liste}
+          showsVerticalScrollIndicator={false}
+        />
+      ) : !hata && !limitHatasi ? (
+        <View style={s.bosDurum}>
+          <Text style={s.bosDurumIkon}>{'\uD83D\uDCEC'}</Text>
+          <Text style={s.bosDurumBaslik}>Sonuc bulunamadi</Text>
+          <Text style={s.bosDurumMetin}>
+            Konuyu biraz daha netlestirip tekrar dene. Ornek, kisi, marka ya da zaman eklemek
+            daha iyi sonuc verir.
+          </Text>
+        </View>
+      ) : null}
 
       <ReklamBanner />
     </SafeAreaView>
@@ -203,7 +169,10 @@ export default function KartlarScreen({ route, navigation }) {
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: tema.bg },
+  container: {
+    flex: 1,
+    backgroundColor: tema.bg,
+  },
   ustKart: {
     marginHorizontal: 12,
     marginTop: 10,
@@ -234,12 +203,6 @@ const s = StyleSheet.create({
   konuMetin: {
     color: tema.textSecondary,
     fontSize: 12,
-  },
-  hata: {
-    color: tema.danger,
-    textAlign: 'center',
-    marginTop: 16,
-    fontSize: 14,
   },
   limitKutusu: {
     marginHorizontal: 12,
@@ -276,8 +239,81 @@ const s = StyleSheet.create({
     fontSize: 11,
     textAlign: 'center',
   },
-  liste: { paddingHorizontal: 12, paddingBottom: 24, paddingTop: 6 },
-  satir: { gap: 10, marginBottom: 10 },
+  durumKutusu: {
+    borderRadius: tema.radius,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
+  hataKutusu: {
+    backgroundColor: tema.dangerDim,
+    borderColor: tema.danger,
+  },
+  hataKutusuDis: {
+    marginHorizontal: 12,
+    marginTop: 12,
+  },
+  hataMetni: {
+    color: tema.text,
+    fontSize: 13,
+    lineHeight: 20,
+    textAlign: 'center',
+  },
+  iskeletAlan: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: 12,
+    paddingTop: 6,
+    paddingBottom: 24,
+    gap: 10,
+  },
+  iskeletKart: {
+    width: '48.5%',
+    minHeight: 156,
+    backgroundColor: tema.cardBg,
+    borderRadius: tema.radius,
+    padding: 15,
+    borderWidth: 1,
+    borderColor: tema.cardBorder,
+    shadowColor: tema.shadow,
+    shadowOpacity: 0.22,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 3,
+  },
+  iskeletRozet: {
+    width: 64,
+    height: 14,
+    borderRadius: 999,
+    backgroundColor: tema.skeleton,
+    marginBottom: 18,
+  },
+  iskeletBaslik: {
+    width: '88%',
+    height: 24,
+    borderRadius: 10,
+    backgroundColor: tema.skeletonStrong,
+    marginBottom: 10,
+  },
+  iskeletSatir: {
+    width: '100%',
+    height: 12,
+    borderRadius: 8,
+    backgroundColor: tema.skeleton,
+    marginBottom: 8,
+  },
+  iskeletSatirKisa: {
+    width: '76%',
+  },
+  liste: {
+    paddingHorizontal: 12,
+    paddingBottom: 24,
+    paddingTop: 6,
+  },
+  satir: {
+    gap: 10,
+    marginBottom: 10,
+  },
   kart: {
     flex: 1,
     backgroundColor: tema.cardBg,
@@ -286,11 +322,14 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: tema.cardBorder,
     minHeight: 156,
-    shadowColor: '#000',
+    shadowColor: tema.shadow,
     shadowOpacity: 0.22,
-    shadowRadius: 8,
+    shadowRadius: 10,
     shadowOffset: { width: 0, height: 6 },
-    elevation: 3,
+    elevation: 4,
+  },
+  kartPasif: {
+    opacity: 0.45,
   },
   kartUst: {
     flexDirection: 'row',
@@ -298,8 +337,11 @@ const s = StyleSheet.create({
     gap: 6,
     marginBottom: 10,
   },
-  emoji: { fontSize: 18 },
-  etiket: { fontSize: 11, color: tema.accent, fontWeight: '600' },
+  etiket: {
+    fontSize: 11,
+    color: tema.accent,
+    fontWeight: '700',
+  },
   baslik: {
     fontSize: 16,
     fontWeight: '700',
@@ -307,5 +349,36 @@ const s = StyleSheet.create({
     marginBottom: 6,
     lineHeight: 21,
   },
-  kanca: { fontSize: 13, color: tema.textSecondary, lineHeight: 19 },
+  kanca: {
+    fontSize: 13,
+    color: tema.textSecondary,
+    lineHeight: 19,
+  },
+  bosDurum: {
+    marginHorizontal: 12,
+    marginTop: 20,
+    backgroundColor: tema.cardBg,
+    borderRadius: tema.radius,
+    borderWidth: 1,
+    borderColor: tema.cardBorder,
+    paddingHorizontal: 18,
+    paddingVertical: 26,
+    alignItems: 'center',
+  },
+  bosDurumIkon: {
+    fontSize: 36,
+    marginBottom: 12,
+  },
+  bosDurumBaslik: {
+    color: tema.text,
+    fontSize: 18,
+    fontWeight: '800',
+    marginBottom: 8,
+  },
+  bosDurumMetin: {
+    color: tema.textSecondary,
+    fontSize: 13,
+    lineHeight: 20,
+    textAlign: 'center',
+  },
 });

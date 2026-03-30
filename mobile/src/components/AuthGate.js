@@ -30,25 +30,19 @@ function GirisEkrani() {
       <View style={s.orbTwo} />
 
       <View style={s.card}>
-        <Text style={s.kicker}>Mobil uygulama</Text>
         <Text style={s.title}>Google hesabinla devam et</Text>
-        <Text style={s.subtitle}>
-          Mobilde fikir ve bilgi kartlarini kullanmak icin Google ile giris zorunlu.
-        </Text>
 
         <TouchableOpacity
           style={[s.button, (!girisHazir || islemde) && s.buttonDisabled]}
           onPress={() => void girisYap()}
           disabled={!girisHazir || islemde}
+          activeOpacity={0.7}
         >
           <Text style={s.buttonText}>
             {islemde ? 'Baglaniyor...' : 'Google ile devam et'}
           </Text>
         </TouchableOpacity>
 
-        <Text style={s.helper}>
-          Girdikten sonra backend istekleri Firebase oturum tokeni ile imzalanir.
-        </Text>
         {!!hata && <Text style={s.error}>{hata}</Text>}
       </View>
     </SafeAreaView>
@@ -97,23 +91,11 @@ const s = StyleSheet.create({
     padding: 22,
     gap: 14,
   },
-  kicker: {
-    color: tema.accent,
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-  },
   title: {
     color: tema.text,
     fontSize: 28,
     fontWeight: '800',
     lineHeight: 34,
-  },
-  subtitle: {
-    color: tema.textSecondary,
-    fontSize: 15,
-    lineHeight: 22,
   },
   button: {
     backgroundColor: tema.accent,
@@ -128,11 +110,6 @@ const s = StyleSheet.create({
     color: tema.bg,
     fontSize: 15,
     fontWeight: '800',
-  },
-  helper: {
-    color: tema.textSecondary,
-    fontSize: 12,
-    lineHeight: 18,
   },
   error: {
     color: tema.danger,
